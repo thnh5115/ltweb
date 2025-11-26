@@ -1,14 +1,7 @@
-$(document).ready(function () {
-    // Admin Sidebar Toggle
-    $('#admin-sidebar-toggle').click(function () {
-        $('.sidebar').toggleClass('open');
-    });
+﻿$(document).ready(function () {
+    // Admin specific hooks can be added here when needed.
 });
 
 function confirmDelete(id, type) {
-    if (confirm('Bạn có chắc chắn muốn xóa ' + type + ' này không?')) {
-        // Call API to delete
-        return true;
-    }
-    return false;
+    return confirm(`Bạn có chắc chắn muốn xóa ${type} này không?`);
 }

@@ -8,8 +8,8 @@ include 'partials/sidebar.php';
 include 'partials/navbar.php';
 ?>
 
-<div class="main-content">
-    <div class="content-body">
+
+    
         <!-- Page Header -->
         <div class="flex justify-between items-center mb-8">
             <div>
@@ -33,19 +33,19 @@ include 'partials/navbar.php';
                             <i
                                 class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                             <input type="text" id="searchInput" class="form-control" style="padding-left: 2.75rem;"
-                                placeholder="Tìm kiếm giao dịch...">
+                                placeholder="Tìm kiếm giao dịch..." aria-label="Tìm kiếm giao dịch">
                         </div>
                     </div>
-                    <select id="filterCategory" class="form-control">
+                    <select id="filterCategory" class="form-control" aria-label="Lọc theo danh mục">
                         <option value="">Tất cả danh mục</option>
                         <!-- Populate via JS -->
                     </select>
-                    <select id="filterType" class="form-control">
+                    <select id="filterType" class="form-control" aria-label="Lọc theo loại">
                         <option value="">Tất cả loại</option>
                         <option value="income">Thu nhập</option>
                         <option value="expense">Chi tiêu</option>
                     </select>
-                    <input type="date" id="filterDate" class="form-control">
+                    <input type="date" id="filterDate" class="form-control" aria-label="Lọc theo ngày">
                 </div>
             </div>
         </div>
@@ -64,7 +64,7 @@ include 'partials/navbar.php';
                             <th class="text-center" style="width: 120px;">Hành động</th>
                         </tr>
                     </thead>
-                    <tbody id="transaction-list">
+                    <tbody id="transaction-list" aria-live="polite">
                         <!-- Loaded via AJAX -->
                         <tr>
                             <td colspan="6">
@@ -101,7 +101,7 @@ include 'partials/navbar.php';
                 <i class="fas fa-plus-circle mr-2 text-primary-600"></i>
                 Thêm giao dịch mới
             </h3>
-            <button class="modal-close" onclick="closeModal('addTransactionModal')">&times;</button>
+            <button class="modal-close" onclick="closeModal('addTransactionModal')" aria-label="Đóng">&times;</button>
         </div>
         <div class="modal-body">
             <form id="addTransactionForm">
@@ -171,7 +171,7 @@ include 'partials/navbar.php';
                 <i class="fas fa-edit mr-2 text-primary-600"></i>
                 Chỉnh sửa giao dịch
             </h3>
-            <button class="modal-close" onclick="closeModal('editTransactionModal')">&times;</button>
+            <button class="modal-close" onclick="closeModal('editTransactionModal')" aria-label="Đóng">&times;</button>
         </div>
         <div class="modal-body">
             <form id="editTransactionForm">

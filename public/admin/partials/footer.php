@@ -3,12 +3,13 @@
 </div> <!-- End app-wrapper -->
 
 <!-- Loading Overlay -->
-<div id="loading-overlay" class="loading-overlay">
-    <div class="spinner"></div>
+<div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite" aria-hidden="true">
+    <div class="spinner" aria-hidden="true"></div>
+    <span class="sr-only">Đang tải...</span>
 </div>
 
 <!-- Toast Container -->
-<div class="toast-container"></div>
+<div class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
 <!-- Main JS -->
 <script src="/assets/user/js/main.js"></script> <!-- Reuse toast/loading logic -->

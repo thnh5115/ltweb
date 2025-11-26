@@ -8,8 +8,8 @@ include 'partials/sidebar.php';
 include 'partials/navbar.php';
 ?>
 
-<div class="main-content">
-    <div class="content-body">
+
+    
         <!-- Page Header -->
         <div class="mb-8">
             <h2 class="text-3xl font-bold text-gray-900 mb-2">

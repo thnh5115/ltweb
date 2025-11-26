@@ -20,7 +20,10 @@ $token = $_GET['token'] ?? '';
     <title>Đặt lại mật khẩu - MoneyManager</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/design-system.css">
+    <link rel="stylesheet" href="/assets/css/animations.css">
     <link rel="stylesheet" href="/assets/user/css/style.css">
+    <meta name="theme-color" content="#0F2744">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         .auth-container {

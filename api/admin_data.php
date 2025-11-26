@@ -1,6 +1,6 @@
 <?php
-require_once '../../config.php';
-require_once '../../functions.php'; // Reuse helper functions if needed
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../functions.php'; // Reuse helper functions if needed
 
 header('Content-Type: application/json');
 

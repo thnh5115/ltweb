@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - MoneyManager</title>
+    <title>MoneyManager Admin | Bảng điều khiển</title>
+    <meta name="theme-color" content="#0F2744">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,4 +33,5 @@
 </head>
 
 <body class="admin-body">
+    <a class="skip-link" href="#main-content">Bỏ qua tới nội dung chính</a>
     <div class="app-wrapper">

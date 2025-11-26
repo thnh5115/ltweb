@@ -16,7 +16,10 @@ if (isLoggedIn()) {
     <title>Đăng nhập - MoneyManager</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/design-system.css">
+    <link rel="stylesheet" href="/assets/css/animations.css">
     <link rel="stylesheet" href="/assets/user/css/style.css">
+    <meta name="theme-color" content="#0F2744">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         .auth-container {
@@ -88,16 +91,27 @@ if (isLoggedIn()) {
                 $.ajax({
                     url: '/api/auth.php',
                     type: 'POST',
+                    dataType: 'json',
                     data: $(this).serialize(),
                     success: function (response) {
-                        if (response.success) {
-                            showToast('success', response.message);
+                        const success = response && response.success;
+                        const message = response && response.message ? response.message : 'Đăng nhập không thành công.';
+                        const redirect = response && response.data && response.data.redirect ? response.data.redirect : null;
+
+                        if (success) {
+                            showToast('success', message);
                             setTimeout(function () {
-                                window.location.href = response.data.redirect;
-                            }, 1000);
+                                if (redirect) {
+                                    window.location.href = redirect;
+                                }
+                            }, 800);
                         } else {
-                            showToast('error', response.message);
+                            showToast('error', message);
                         }
+                    },
+                    error: function (xhr) {
+                        const msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Có lỗi xảy ra, vui lòng thử lại.';
+                        showToast('error', msg);
                     }
                 });
             });

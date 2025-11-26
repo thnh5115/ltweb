@@ -8,8 +8,8 @@ include 'partials/sidebar.php';
 include 'partials/navbar.php';
 ?>
 
-<div class="main-content">
-    <div class="content-body">
+
+    
         <!-- Page Header -->
         <div class="flex justify-between items-center mb-8">
             <div>

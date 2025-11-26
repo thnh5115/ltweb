@@ -57,8 +57,10 @@
 
 /* Admin Navbar */
 .admin-navbar {
-    background: white;
+    background: rgba(255, 255, 255, 0.95);
     box-shadow: var(--shadow-md);
+    border-bottom: 1px solid var(--gray-200);
+    backdrop-filter: blur(10px);
 }
 
 /* Admin Body Background */
@@ -192,12 +194,15 @@ body.admin-body {
     padding: var(--space-4);
     text-align: left;
     border-bottom: 2px solid var(--gray-200);
+    line-height: var(--leading-normal);
 }
 
 .admin-table td {
     padding: var(--space-4);
     border-bottom: 1px solid var(--gray-200);
     color: var(--gray-700);
+    vertical-align: middle;
+    line-height: var(--leading-normal);
 }
 
 .admin-table tbody tr {
@@ -350,6 +355,13 @@ body.admin-body {
     box-shadow: var(--shadow-md);
     border: 1px solid var(--gray-200);
     height: 100%;
+    transition: all var(--transition-slow);
+}
+
+.dashboard-widget:hover {
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary-200);
+    transform: translateY(-3px);
 }
 
 .widget-header {
@@ -479,6 +491,11 @@ body.admin-body {
     box-shadow: var(--shadow-primary);
 }
 
+.settings-menu-item:focus-visible {
+    outline: 2px solid var(--primary-400);
+    outline-offset: 2px;
+}
+
 .settings-section {
     display: none;
 }
@@ -542,6 +559,7 @@ input:checked+.toggle-slider:before {
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-md);
     border: 1px solid var(--gray-200);
+    transition: all var(--transition-slow);
 }
 
 .chart-header {
@@ -560,6 +578,12 @@ input:checked+.toggle-slider:before {
 .chart-controls {
     display: flex;
     gap: var(--space-2);
+}
+
+.chart-container:hover {
+    border-color: var(--primary-200);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
 }
 
 /* ===== ADMIN PAGINATION ===== */

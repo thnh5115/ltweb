@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản Lý Chi Tiêu</title>
+    <title>MoneyManager | Quản lý chi tiêu</title>
+    <meta name="theme-color" content="#0F2744">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,4 +32,5 @@
 </head>
 
 <body>
+    <a class="skip-link" href="#main-content">Bỏ qua tới nội dung chính</a>
     <div class="app-wrapper">

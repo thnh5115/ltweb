@@ -8,8 +8,8 @@ include 'partials/sidebar.php';
 include 'partials/navbar.php';
 ?>
 
-<div class="main-content">
-    <div class="content-body">
+
+    
         <!-- Hero Section -->
         <div class="dashboard-hero mb-8">
             <div class="flex justify-between items-center">

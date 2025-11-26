@@ -24,14 +24,20 @@ function getCurrentUser()
     return isset($_SESSION['user']) ? $_SESSION['user'] : null;
 }
 
-function jsonResponse($success, $message, $data = [])
+function jsonResponse($success, $message, $data = [], $extra = [])
 {
     header('Content-Type: application/json');
-    echo json_encode([
+    $payload = [
         'success' => $success,
         'message' => $message,
         'data' => $data
-    ]);
+    ];
+
+    if (is_array($extra) && !empty($extra)) {
+        $payload = array_merge($payload, $extra);
+    }
+
+    echo json_encode($payload);
     exit;
 }
 ?>

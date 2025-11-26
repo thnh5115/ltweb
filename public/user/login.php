@@ -51,18 +51,18 @@ if (isLoggedIn()) {
             </div>
 
             <form id="loginForm">
-                <input type="hidden" name="action" value="login">
+                <input type="hidden" name="action" >
                 <div class="form-group">
                     <label class="form-label">Email</label>
                     <div class="relative">
                         <input type="text" name="email" class="form-control" placeholder="Email hoặc Username" required
-                            value="user@example.com">
+                            >
                     </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Mật khẩu</label>
                     <input type="password" name="password" class="form-control" placeholder="••••••" required
-                        value="123456">
+                        >
                 </div>
                 <div class="form-group flex justify-between items-center text-sm">
                     <label class="flex items-center gap-2">

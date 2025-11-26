@@ -76,23 +76,23 @@ include 'partials/navbar.php';
                             Thông tin cá nhân
                         </h3>
                     </div>
-                    <form id="updateProfileForm" class="p-6">
-                        <input type="hidden" name="action" value="update_profile">
+                     <form id="updateProfileForm" class="p-6">
+                         <input type="hidden" name="action" value="profile_update">
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-user mr-1"></i> Họ và tên
                                 </label>
-                                <input type="text" name="name" class="form-control"
-                                    value="<?php echo $_SESSION['user_name'] ?? ''; ?>" required>
-                            </div>
+                                 <input type="text" name="full_name" class="form-control"
+                                     value="<?php echo $_SESSION['user_name'] ?? ''; ?>" required>
+                             </div>
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-envelope mr-1"></i> Email
                                 </label>
-                                <input type="email" name="email" class="form-control"
-                                    value="<?php echo $_SESSION['user_email'] ?? ''; ?>" required>
+                                 <input type="email" name="email" class="form-control"
+                                     value="<?php echo $_SESSION['user_email'] ?? ''; ?>" required>
                             </div>
                         </div>
 
@@ -103,20 +103,6 @@ include 'partials/navbar.php';
                                 </label>
                                 <input type="tel" name="phone" class="form-control" placeholder="0123456789">
                             </div>
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-birthday-cake mr-1"></i> Ngày sinh
-                                </label>
-                                <input type="date" name="birthday" class="form-control">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">
-                                <i class="fas fa-map-marker-alt mr-1"></i> Địa chỉ
-                            </label>
-                            <textarea name="address" class="form-control" rows="2"
-                                placeholder="Nhập địa chỉ của bạn"></textarea>
                         </div>
 
                         <div class="flex justify-end mt-6">
@@ -135,8 +121,8 @@ include 'partials/navbar.php';
                             Đổi mật khẩu
                         </h3>
                     </div>
-                    <form id="changePasswordForm" class="p-6">
-                        <input type="hidden" name="action" value="change_password">
+                     <form id="changePasswordForm" class="p-6">
+                         <input type="hidden" name="action" value="profile_change_password">
 
                         <div class="form-group">
                             <label class="form-label">
@@ -192,41 +178,53 @@ include 'partials/navbar.php';
                         </h3>
                     </div>
                     <div class="p-6 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="font-medium">Thông báo email</p>
-                                <p class="text-sm text-muted">Nhận thông báo qua email</p>
-                            </div>
-                            <div class="toggle-switch">
-                                <input type="checkbox" id="email-notifications" checked>
-                                <span class="toggle-slider"></span>
-                            </div>
-                        </div>
+                         <form id="settingsForm" class="space-y-4">
+                             <input type="hidden" name="action" value="profile_update_settings">
+                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                 <div class="form-group">
+                                     <label class="form-label">Đơn vị tiền tệ mặc định</label>
+                                     <select class="form-control" id="default_currency" name="default_currency">
+                                         <option value="VND">VND</option>
+                                         <option value="USD">USD</option>
+                                         <option value="EUR">EUR</option>
+                                     </select>
+                                 </div>
+                                 <div class="form-group">
+                                     <label class="form-label">Giới hạn chi tiêu/tháng</label>
+                                     <input type="number" step="0.01" class="form-control" id="monthly_budget_limit"
+                                         name="monthly_budget_limit" placeholder="Ví dụ: 10000000">
+                                 </div>
+                             </div>
+                             <div class="flex items-center justify-between">
+                                 <div>
+                                     <p class="font-medium">Thông báo email</p>
+                                     <p class="text-sm text-muted">Nhận thông báo qua email</p>
+                                 </div>
+                                 <div class="toggle-switch">
+                                     <input type="checkbox" id="notify_email" name="notify_email" value="1">
+                                     <span class="toggle-slider"></span>
+                                 </div>
+                             </div>
 
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="font-medium">Nhắc nhở ngân sách</p>
-                                <p class="text-sm text-muted">Cảnh báo khi vượt ngân sách</p>
-                            </div>
-                            <div class="toggle-switch">
-                                <input type="checkbox" id="budget-alerts" checked>
-                                <span class="toggle-slider"></span>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="font-medium">Chế độ tối</p>
-                                <p class="text-sm text-muted">Giao diện tối cho mắt</p>
-                            </div>
-                            <div class="toggle-switch">
-                                <input type="checkbox" id="dark-mode">
-                                <span class="toggle-slider"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                             <div class="flex items-center justify-between">
+                                 <div>
+                                     <p class="font-medium">Thông báo đẩy</p>
+                                     <p class="text-sm text-muted">Nhận thông báo trên trình duyệt/ứng dụng</p>
+                                 </div>
+                                 <div class="toggle-switch">
+                                     <input type="checkbox" id="notify_push" name="notify_push" value="1">
+                                     <span class="toggle-slider"></span>
+                                 </div>
+                             </div>
+                             <div class="flex justify-end">
+                                 <button type="submit" class="btn btn-primary">
+                                     <i class="fas fa-save mr-2"></i> Lưu cài đặt
+                                 </button>
+                             </div>
+                         </form>
+                     </div>
+                 </div>
+             </div>
         </div>
     </div>
 </div>
@@ -305,20 +303,43 @@ include 'partials/navbar.php';
             $('#strength-text').text(text).css('color', color);
         });
 
-        // Toggle switches
-        $('.toggle-switch input').on('change', function () {
-            const setting = $(this).attr('id');
-            const enabled = $(this).is(':checked');
-            showToast('success', 'Đã cập nhật tùy chọn');
+        // Settings form
+        $('#settingsForm').submit(function (e) {
+            e.preventDefault();
+            const payload = $(this).serializeArray();
+            const dataObj = {};
+            payload.forEach(item => dataObj[item.name] = item.value);
+            dataObj['notify_email'] = $('#notify_email').is(':checked') ? 1 : 0;
+            dataObj['notify_push'] = $('#notify_push').is(':checked') ? 1 : 0;
+            dataObj['action'] = 'profile_update_settings';
+
+            $.post('/api/data.php', dataObj, function (res) {
+                if (res.success) {
+                    showToast('success', res.message);
+                } else {
+                    showToast('error', res.message || 'Có lỗi xảy ra');
+                }
+            });
         });
     });
 
-    function loadUserStats() {
-        $.get('/api/data.php?action=user_stats', function (res) {
-            if (res.success) {
-                $('#user-transaction-count').text(res.data.transactions);
-                $('#user-category-count').text(res.data.categories);
-                $('#user-join-date').text(res.data.join_date);
+    function loadProfile() {
+        $.get('/api/data.php?action=profile_get', function (res) {
+            if (res.success && res.data) {
+                $('[name="full_name"]').val(res.data.full_name || '');
+                $('[name="email"]').val(res.data.email || '');
+                $('[name="phone"]').val(res.data.phone || '');
+            }
+        });
+    }
+
+    function loadProfileSettings() {
+        $.get('/api/data.php?action=profile_get_settings', function (res) {
+            if (res.success && res.data) {
+                $('#default_currency').val(res.data.default_currency || 'VND');
+                $('#monthly_budget_limit').val(res.data.monthly_budget_limit || '');
+                $('#notify_email').prop('checked', !!res.data.notify_email);
+                $('#notify_push').prop('checked', !!res.data.notify_push);
             }
         });
     }

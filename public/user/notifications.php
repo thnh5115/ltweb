@@ -165,27 +165,40 @@ include 'partials/navbar.php';
 
         $('#markAllRead').click(function () {
             $.post('/api/data.php', {
-                action: 'mark_all_notifications_read'
+                action: 'notifications_mark_all_read'
             }, function (response) {
                 if (response.success) {
                     showToast('success', 'Đã đánh dấu tất cả thông báo là đã đọc');
                     loadNotifications();
+                    loadUnreadCount();
+                } else {
+                    showToast('error', response.message || 'Có lỗi xảy ra');
                 }
             });
         });
+
+        loadUnreadCount();
     });
 
     function loadNotifications() {
         const filters = {
-            action: 'get_notifications',
-            type: $('#filterType').val(),
-            status: $('#filterStatus').val(),
-            date: $('#filterDate').val()
+            action: 'notifications_list',
+            unread_only: $('#filterStatus').val() === 'unread' ? 1 : 0
         };
 
         $.get('/api/data.php', filters, function (response) {
             if (response.success) {
-                renderNotifications(response.data);
+                renderNotifications(response.data || []);
+            } else {
+                showToast('error', response.message || 'Có lỗi xảy ra');
+            }
+        });
+    }
+
+    function loadUnreadCount() {
+        $.get('/api/data.php?action=notifications_unread_count', function (res) {
+            if (res.success && res.data && typeof res.data.unread_count !== 'undefined') {
+                $('#notif-badge').text(res.data.unread_count);
             }
         });
     }
@@ -206,24 +219,30 @@ include 'partials/navbar.php';
         }
 
         notifications.forEach(notif => {
-            const isUnread = notif.status === 'unread';
+            const isUnread = notif.is_read == 0;
             const iconClass = getIconClass(notif.type);
             const icon = getIcon(notif.type);
+            const createdAt = notif.created_at || '';
 
             const html = `
             <div class="notification-item ${isUnread ? 'unread' : ''}" data-id="${notif.id}">
                 <div class="flex gap-4">
-                    <div class="notification-icon ${notif.type}">
+                    <div class="notification-icon ${notif.type || 'info'}">
                         <i class="${icon}"></i>
                     </div>
                     <div class="notification-content">
                         <div class="notification-title">${notif.title}</div>
                         <div class="notification-message">${notif.message}</div>
                         <div class="notification-time">
-                            <i class="far fa-clock mr-1"></i> ${notif.time}
+                            <i class="far fa-clock mr-1"></i> ${createdAt}
                         </div>
                     </div>
                     ${isUnread ? '<span class="notification-badge badge-primary">Mới</span>' : ''}
+                    <div class="flex items-center gap-2">
+                        <button class="btn btn-sm btn-outline text-danger" onclick="deleteNotification(${notif.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -239,12 +258,30 @@ include 'partials/navbar.php';
 
     function markAsRead(id, element) {
         $.post('/api/data.php', {
-            action: 'mark_notification_read',
+            action: 'notifications_mark_read',
             id: id
         }, function (response) {
             if (response.success) {
                 element.removeClass('unread');
                 element.find('.notification-badge').remove();
+                loadUnreadCount();
+            } else {
+                showToast('error', response.message || 'Có lỗi xảy ra');
+            }
+        });
+    }
+
+    function deleteNotification(id) {
+        $.post('/api/data.php', {
+            action: 'notifications_delete',
+            id: id
+        }, function (res) {
+            if (res.success) {
+                showToast('success', 'Đã xóa thông báo');
+                loadNotifications();
+                loadUnreadCount();
+            } else {
+                showToast('error', res.message || 'Có lỗi xảy ra');
             }
         });
     }
@@ -254,7 +291,12 @@ include 'partials/navbar.php';
             'budget': 'fas fa-wallet',
             'bill': 'fas fa-file-invoice-dollar',
             'goal': 'fas fa-bullseye',
-            'system': 'fas fa-info-circle'
+            'system': 'fas fa-info-circle',
+            'info': 'fas fa-info-circle',
+            'success': 'fas fa-check-circle',
+            'warning': 'fas fa-exclamation-circle',
+            'error': 'fas fa-times-circle',
+            'reminder': 'fas fa-bell'
         };
         return icons[type] || 'fas fa-bell';
     }

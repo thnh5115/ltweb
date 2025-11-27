@@ -50,19 +50,17 @@ if (isLoggedIn()) {
                 <p class="text-muted">Đăng nhập để quản lý chi tiêu</p>
             </div>
 
-            <form id="loginForm">
-                <input type="hidden" name="action" >
+            <form id="loginForm" method="post" autocomplete="off">
+                <input type="hidden" name="action" value="login">
                 <div class="form-group">
                     <label class="form-label">Email</label>
                     <div class="relative">
-                        <input type="text" name="email" class="form-control" placeholder="Email hoặc Username" required
-                            >
+                        <input type="email" name="email" class="form-control" placeholder="Email hoặc Username" required>
                     </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Mật khẩu</label>
-                    <input type="password" name="password" class="form-control" placeholder="••••••" required
-                        >
+                    <input type="password" name="password" class="form-control" placeholder="••••••••" required>
                 </div>
                 <div class="form-group flex justify-between items-center text-sm">
                     <label class="flex items-center gap-2">
@@ -88,11 +86,17 @@ if (isLoggedIn()) {
             $('#loginForm').submit(function (e) {
                 e.preventDefault();
 
+                const payload = {
+                    action: 'login',
+                    email: $.trim($('input[name="email"]').val()),
+                    password: $('input[name="password"]').val()
+                };
+
                 $.ajax({
                     url: '/api/auth.php',
                     type: 'POST',
                     dataType: 'json',
-                    data: $(this).serialize(),
+                    data: payload,
                     success: function (response) {
                         const success = response && response.success;
                         const message = response && response.message ? response.message : 'Đăng nhập không thành công.';

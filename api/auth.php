@@ -2,9 +2,6 @@
 /**
  * Authentication API
  * Handles login, register, forgot password, and reset password actions
- * 
- * @author Senior PHP Developer
- * @version 1.0
  */
 
 session_start();
@@ -18,10 +15,10 @@ require_once __DIR__ . '/../db/config.php';
 
 /**
  * Send JSON response and terminate script
- * 
- * @param bool $success Success status
+ *
+ * @param bool   $success Success status
  * @param string $message Response message
- * @param array $data Additional data
+ * @param array  $data    Additional data
  * @return void
  */
 function jsonResponse($success, $message, $data = [])
@@ -29,16 +26,25 @@ function jsonResponse($success, $message, $data = [])
     echo json_encode([
         'success' => $success,
         'message' => $message,
-        'data' => $data
+        'data'    => $data
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-// Get action from request
-$action = $_POST['action'] ?? $_GET['action'] ?? null;
+// Merge GET/POST with JSON body (JSON overrides)
+$rawBody     = file_get_contents('php://input');
+$jsonBody    = json_decode($rawBody, true);
+$requestData = array_merge(
+    $_GET ?? [],
+    $_POST ?? [],
+    is_array($jsonBody) ? $jsonBody : []
+);
 
-// Fallback: if action missing but có email/password gửi lên thì mặc định login
-if (!$action && isset($_POST['email'], $_POST['password'])) {
+// Get action from request
+$action = $requestData['action'] ?? null;
+
+// Fallback: if action is missing but email/password present, default to login
+if (!$action && isset($requestData['email'], $requestData['password'])) {
     $action = 'login';
 }
 
@@ -49,7 +55,7 @@ if (!$action) {
 // Dispatch to appropriate handler
 switch ($action) {
     case 'login':
-        handleLogin($pdo);
+        handleLogin($pdo, $requestData);
         break;
 
     case 'register':
@@ -73,26 +79,26 @@ switch ($action) {
 
 /**
  * Handle user login
- * 
- * @param PDO $pdo Database connection
+ *
+ * @param PDO   $pdo     Database connection
+ * @param array $request Request payload (GET/POST/JSON merged)
  * @return void
  */
-function handleLogin($pdo)
+function handleLogin($pdo, array $request)
 {
-    // Get and sanitize input
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
+    // Get and normalize input
+    $email    = strtolower(trim($request['email'] ?? ''));
+    $password = (string) ($request['password'] ?? '');
 
     // Validate input
-    if (empty($email)) {
+    if ($email === '') {
         jsonResponse(false, 'Vui lòng nhập email');
     }
 
-    if (empty($password)) {
+    if ($password === '') {
         jsonResponse(false, 'Vui lòng nhập mật khẩu');
     }
 
-    // Basic email format validation
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         jsonResponse(false, 'Email không hợp lệ');
     }
@@ -100,12 +106,11 @@ function handleLogin($pdo)
     try {
         // Query user from database
         $stmt = $pdo->prepare("
-            SELECT id, fullname, email, password_hash, role 
-            FROM users 
-            WHERE email = :email 
+            SELECT id, fullname, email, password_hash, role
+            FROM users
+            WHERE LOWER(email) = :email
             LIMIT 1
         ");
-
         $stmt->execute([':email' => $email]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -119,25 +124,19 @@ function handleLogin($pdo)
         session_regenerate_id(true);
 
         // Store user information in session
-        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['user_id']    = $user['id'];
         $_SESSION['user_email'] = $user['email'];
-        $_SESSION['user_name'] = $user['fullname'];
-        $_SESSION['user_role'] = $user['role'];
+        $_SESSION['user_name']  = $user['fullname'];
+        $_SESSION['user_role']  = $user['role'];
 
         // Determine redirect URL based on role
         $redirect = '/public/user/dashboard.php'; // Default fallback
-
         if ($user['role'] === 'ADMIN') {
             $redirect = '/public/admin/admin_dashboard.php';
         } elseif ($user['role'] === 'USER') {
             $redirect = '/public/user/dashboard.php';
         }
 
-        // Optional: Update last login timestamp
-        // $updateStmt = $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = :id");
-        // $updateStmt->execute([':id' => $user['id']]);
-
-        // Return success response
         jsonResponse(true, 'Đăng nhập thành công', [
             'redirect' => $redirect
         ]);
@@ -145,8 +144,6 @@ function handleLogin($pdo)
     } catch (PDOException $e) {
         // Log error for debugging (in production, use proper logging)
         error_log("Login Error: " . $e->getMessage());
-
-        // Return generic error message to user
         jsonResponse(false, 'Lỗi hệ thống, vui lòng thử lại sau');
     }
 }

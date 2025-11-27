@@ -3,8 +3,8 @@
 
 -- Users
 INSERT INTO users (id, fullname, email, password_hash, role, phone, avatar_url) VALUES
-    (1, 'Super Admin', 'admin@test.com', '$2y$10$EqQkyeZD1bunDKPUeMFcPe1x8U4cHi.ovSPSd5Hp2WVoMBB85xKzi', 'ADMIN', '0900000000', NULL),
-    (2, 'Nguyen Van A', 'user@test.com', '$2y$10$EqQkyeZD1bunDKPUeMFcPe1x8U4cHi.ovSPSd5Hp2WVoMBB85xKzi', 'USER', '0911111111', NULL)
+    (1, 'Super Admin', 'admin@test.com', '$2y$12$RDIAPI4lz/3LmcHOYlP4g.utgqj4EXAmgoGacIQbBDgKDzbsD7FXi', 'ADMIN', '0900000000', NULL),
+    (2, 'Nguyen Van A', 'user@test.com', '$2y$12$RDIAPI4lz/3LmcHOYlP4g.utgqj4EXAmgoGacIQbBDgKDzbsD7FXi', 'USER', '0911111111', NULL)
 ON DUPLICATE KEY UPDATE
     fullname = VALUES(fullname),
     password_hash = VALUES(password_hash),

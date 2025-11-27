@@ -194,53 +194,73 @@ include 'partials/navbar.php';
 
 <script>
     $(document).ready(function () {
+        loadCategoryStats();
         loadCategories();
-        loadStats();
-
-        $('#addCategoryForm').submit(function (e) {
-            e.preventDefault();
-            $.post('/api/admin_data.php', $(this).serialize(), function (res) {
-                if (res.success) {
-                    showToast('success', res.message);
-                    closeModal('addCategoryModal');
-                    $('#addCategoryForm')[0].reset();
-                    loadCategories();
-                    loadStats();
-                } else {
-                    showToast('error', res.message);
-                }
-            });
-        });
 
         $('#searchInput, #filterType').on('change keyup', function () {
             loadCategories();
         });
+
+        $('#addCategoryForm').on('submit', function (e) {
+            e.preventDefault();
+            const payload = $(this).serializeArray().reduce((acc, cur) => {
+                acc[cur.name] = cur.value;
+                return acc;
+            }, {});
+            payload.action = 'admin_create_category';
+            $.ajax({
+                url: '/api/admin_data.php',
+                method: 'POST',
+                dataType: 'json',
+                data: payload
+            }).done(function (res) {
+                if (res.success) {
+                    showToast('success', res.message || 'Thêm danh mục thành công');
+                    closeModal('addCategoryModal');
+                    $('#addCategoryForm')[0].reset();
+                    loadCategoryStats();
+                    loadCategories();
+                } else {
+                    showToast('error', res.message || 'Không thành công');
+                }
+            }).fail(function () {
+                showToast('error', 'Lỗi hệ thống');
+            });
+        });
     });
 
-    function loadStats() {
-        $.get('/api/admin_data.php?action=category_stats', function (res) {
+    function loadCategoryStats() {
+        $.post('/api/admin_data.php', { action: 'admin_category_stats' }, function (res) {
             if (res.success) {
-                $('#total-categories').text(res.data.total);
-                $('#income-categories').text(res.data.income);
-                $('#expense-categories').text(res.data.expense);
-                $('#used-categories').text(res.data.used);
+                $('#total-categories').text(res.data.total ?? 0);
+                $('#income-categories').text(res.data.income ?? 0);
+                $('#expense-categories').text(res.data.expense ?? 0);
+                $('#used-categories').text(res.data.used ?? 0);
             }
+        }).fail(function () {
+            console.error('Failed to load category stats');
         });
     }
 
     function loadCategories() {
         const filters = {
-            action: 'get_categories',
+            action: 'admin_get_categories',
             search: $('#searchInput').val(),
             type: $('#filterType').val()
         };
 
-        $.get('/api/admin_data.php', filters, function (res) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: filters
+        }).done(function (res) {
             if (res.success) {
                 const list = $('#category-list');
                 list.empty();
 
-                if (res.data.length === 0) {
+                const items = (res.data && res.data.items) ? res.data.items : res.data || [];
+                if (items.length === 0) {
                     list.html(`
                     <div class="col-span-full">
                         <div class="empty-state">
@@ -253,22 +273,27 @@ include 'partials/navbar.php';
                     return;
                 }
 
-                res.data.forEach(c => {
-                    const typeBadge = c.type === 'income'
+                items.forEach(c => {
+                    const typeBadge = (c.type || '').toUpperCase() === 'INCOME'
                         ? '<span class="badge badge-success"><i class="fas fa-arrow-down mr-1"></i>Thu nhập</span>'
                         : '<span class="badge badge-danger"><i class="fas fa-arrow-up mr-1"></i>Chi tiêu</span>';
+
+                    const statusLabel = (c.status || '').toUpperCase();
+                    const statusBadge = statusLabel === 'ACTIVE'
+                        ? '<span class="status-badge status-active">Đang dùng</span>'
+                        : '<span class="status-badge status-banned">Ẩn</span>';
 
                     const html = `
                     <div class="card hover-lift entrance-fade">
                         <div class="flex items-start justify-between mb-4">
-                            <div class="w-14 h-14 rounded-xl flex items-center justify-center text-white shadow-lg" style="background: ${c.color}">
-                                <i class="fas ${c.icon} text-2xl"></i>
+                            <div class="w-14 h-14 rounded-xl flex items-center justify-center text-white shadow-lg" style="background: ${c.color || '#3B6FD8'}">
+                                <i class="fas ${c.icon || 'fa-tag'} text-2xl"></i>
                             </div>
                             <div class="flex gap-2">
-                                <button class="btn btn-sm btn-outline" onclick="editCategory(${c.id})">
+                                <button class="btn btn-sm btn-outline" onclick="openEditCategory(${c.id})">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteCategory(${c.id})">
+                                <button class="btn btn-sm btn-danger" onclick="updateCategoryStatus(${c.id}, 'DELETED')">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -276,6 +301,7 @@ include 'partials/navbar.php';
                         <h3 class="font-bold text-lg mb-2">${c.name}</h3>
                         <div class="flex items-center justify-between mb-3">
                             ${typeBadge}
+                            ${statusBadge}
                         </div>
                         <div class="text-sm text-muted">
                             <i class="fas fa-users mr-1"></i> ${c.usage_count || 0} người dùng
@@ -284,30 +310,39 @@ include 'partials/navbar.php';
                 `;
                     list.append(html);
                 });
+            } else {
+                showToast('error', res.message || 'Tải danh mục thất bại');
             }
+        }).fail(function () {
+            showToast('error', 'Lỗi hệ thống');
         });
     }
 
-    function deleteCategory(id) {
-        if (confirm('Bạn có chắc muốn xóa danh mục này? Điều này sẽ ảnh hưởng đến tất cả người dùng.')) {
-            $.post('/api/admin_data.php', {
-                action: 'delete_category',
-                id: id
-            }, function (res) {
-                if (res.success) {
-                    showToast('success', res.message);
-                    loadCategories();
-                    loadStats();
-                } else {
-                    showToast('error', res.message);
-                }
-            });
-        }
+    function openEditCategory(id) {
+        // Optional: call detail API; tạm thời chỉ đổi trạng thái
+        alert('Chức năng chỉnh sửa chưa được triển khai.');
     }
 
-    function closeModal(id) {
-        $('#' + id).removeClass('active').css('display', 'none');
+    function updateCategoryStatus(id, status) {
+        if (!confirm('Bạn có chắc muốn cập nhật trạng thái danh mục?')) return;
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: { action: 'admin_update_category_status', id, status }
+        }).done(function (res) {
+            if (res.success) {
+                showToast('success', res.message || 'Cập nhật thành công');
+                loadCategoryStats();
+                loadCategories();
+            } else {
+                showToast('error', res.message || 'Cập nhật thất bại');
+            }
+        }).fail(function () {
+            showToast('error', 'Lỗi hệ thống');
+        });
     }
 </script>
+
 
 <?php include 'partials/footer.php'; ?>

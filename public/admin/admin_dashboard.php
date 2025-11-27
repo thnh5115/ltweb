@@ -8,8 +8,6 @@ include 'partials/sidebar.php';
 include 'partials/navbar.php';
 ?>
 
-
-    
         <!-- Page Header -->
         <div class="mb-8">
             <h2 class="text-3xl font-bold text-gray-900 mb-2">
@@ -20,7 +18,7 @@ include 'partials/navbar.php';
         </div>
 
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 stagger-children">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8 stagger-children">
             <div class="admin-stat-card">
                 <div class="admin-stat-icon blue">
                     <i class="fas fa-users"></i>
@@ -48,12 +46,25 @@ include 'partials/navbar.php';
             </div>
 
             <div class="admin-stat-card">
+                <div class="admin-stat-icon teal">
+                    <i class="fas fa-th-list"></i>
+                </div>
+                <div class="admin-stat-content">
+                    <span class="admin-stat-label">Danh mục</span>
+                    <span class="admin-stat-value" id="total-categories">0</span>
+                    <span class="admin-stat-change positive">
+                        <i class="fas fa-arrow-up"></i> +5%
+                    </span>
+                </div>
+            </div>
+
+            <div class="admin-stat-card">
                 <div class="admin-stat-icon green">
                     <i class="fas fa-arrow-down"></i>
                 </div>
                 <div class="admin-stat-content">
-                    <span class="admin-stat-label">Tổng thu nhập</span>
-                    <span class="admin-stat-value" id="total-income" style="color: var(--success);">0 đ</span>
+                    <span class="admin-stat-label">Chi tiêu tháng này</span>
+                    <span class="admin-stat-value" id="total-expense-month" style="color: var(--success);">0 đ</span>
                     <span class="admin-stat-change positive">
                         <i class="fas fa-arrow-up"></i> +15%
                     </span>
@@ -62,11 +73,11 @@ include 'partials/navbar.php';
 
             <div class="admin-stat-card">
                 <div class="admin-stat-icon red">
-                    <i class="fas fa-arrow-up"></i>
+                    <i class="fas fa-hourglass-half"></i>
                 </div>
                 <div class="admin-stat-content">
-                    <span class="admin-stat-label">Tổng chi tiêu</span>
-                    <span class="admin-stat-value" id="total-expense" style="color: var(--danger);">0 đ</span>
+                    <span class="admin-stat-label">Giao dịch pending</span>
+                    <span class="admin-stat-value" id="pending-transactions" style="color: var(--danger);">0</span>
                     <span class="admin-stat-change negative">
                         <i class="fas fa-arrow-down"></i> -5%
                     </span>
@@ -81,13 +92,8 @@ include 'partials/navbar.php';
                     <div class="chart-header">
                         <h3 class="chart-title">
                             <i class="fas fa-chart-line mr-2 text-primary-600"></i>
-                            Chi tiêu toàn hệ thống
+                            Chi tiêu theo tháng (năm hiện tại)
                         </h3>
-                        <div class="chart-controls">
-                            <button class="btn btn-sm btn-outline">Tháng</button>
-                            <button class="btn btn-sm btn-outline">Quý</button>
-                            <button class="btn btn-sm btn-outline">Năm</button>
-                        </div>
                     </div>
                     <div style="height: 320px; padding: var(--space-4);">
                         <canvas id="systemLineChart"></canvas>
@@ -100,7 +106,7 @@ include 'partials/navbar.php';
                     <div class="chart-header">
                         <h3 class="chart-title">
                             <i class="fas fa-chart-pie mr-2 text-accent-600"></i>
-                            Tỷ lệ Thu/Chi
+                            Phân bố chi tiêu theo tháng
                         </h3>
                     </div>
                     <div
@@ -185,33 +191,37 @@ include 'partials/navbar.php';
 
 <script>
     $(document).ready(function () {
-        loadDashboardStats();
+        loadDashboardSummary();
         loadCharts();
         loadRecentData();
     });
 
-    function loadDashboardStats() {
-        $.get('/api/admin_data.php?action=dashboard_stats', function (res) {
-            if (res.success) {
-                $('#total-users').text(res.data.total_users);
-                $('#total-transactions').text(res.data.total_transactions);
-                $('#total-income').text(formatMoney(res.data.total_income));
-                $('#total-expense').text(formatMoney(res.data.total_expense));
+    function loadDashboardSummary() {
+        $.post('/api/admin_data.php', { action: 'get_dashboard_summary' }, function (res) {
+            if (res && res.success && res.data) {
+                $('#total-users').text(res.data.total_users ?? 0);
+                $('#total-transactions').text(res.data.total_transactions ?? 0);
+                $('#total-categories').text(res.data.total_categories ?? 0);
+                $('#total-expense-month').text(formatMoney(res.data.total_expense_this_month ?? 0));
+                $('#pending-transactions').text(res.data.pending_transactions ?? 0);
             }
         });
     }
 
     function loadCharts() {
-        $.get('/api/admin_data.php?action=chart_data', function (res) {
-            if (res.success) {
+        $.post('/api/admin_data.php', { action: 'get_dashboard_chart' }, function (res) {
+            if (res && res.success && res.data) {
+                const labels = res.data.labels || [];
+                const values = res.data.values || [];
+
                 // Line Chart
                 new Chart(document.getElementById('systemLineChart'), {
                     type: 'line',
                     data: {
-                        labels: res.data.line.labels,
+                        labels: labels,
                         datasets: [{
                             label: 'Chi tiêu',
-                            data: res.data.line.data,
+                            data: values,
                             borderColor: '#EF4444',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
                             borderWidth: 3,
@@ -227,40 +237,26 @@ include 'partials/navbar.php';
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: false
-                            }
-                        },
+                        plugins: { legend: { display: false } },
                         scales: {
                             y: {
                                 beginAtZero: true,
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.05)'
-                                },
-                                ticks: {
-                                    font: {
-                                        family: 'JetBrains Mono'
-                                    }
-                                }
+                                grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                                ticks: { font: { family: 'JetBrains Mono' } }
                             },
-                            x: {
-                                grid: {
-                                    display: false
-                                }
-                            }
+                            x: { grid: { display: false } }
                         }
                     }
                 });
 
-                // Pie Chart
+                // Pie Chart (phân bố chi tiêu theo tháng)
                 new Chart(document.getElementById('systemPieChart'), {
                     type: 'doughnut',
                     data: {
-                        labels: ['Thu nhập', 'Chi tiêu'],
+                        labels: labels,
                         datasets: [{
-                            data: [res.data.pie.income, res.data.pie.expense],
-                            backgroundColor: ['#10B981', '#EF4444'],
+                            data: values,
+                            backgroundColor: labels.map(() => '#6C5CE7'),
                             borderWidth: 3,
                             borderColor: '#fff',
                             hoverOffset: 10
@@ -274,11 +270,7 @@ include 'partials/navbar.php';
                                 position: 'bottom',
                                 labels: {
                                     padding: 15,
-                                    font: {
-                                        family: 'Inter',
-                                        size: 13,
-                                        weight: '600'
-                                    }
+                                    font: { family: 'Inter', size: 13, weight: '600' }
                                 }
                             }
                         }
@@ -290,14 +282,16 @@ include 'partials/navbar.php';
 
     function loadRecentData() {
         // Recent Transactions
-        $.get('/api/admin_data.php?action=get_transactions', function (res) {
+        $.post('/api/admin_data.php', { action: 'get_recent_transactions' }, function (res) {
             if (res.success) {
                 const list = $('#recent-transactions');
                 list.empty();
+                if (!res.data || !res.data.length) {
+                    list.append('<tr><td colspan="4" class="text-center text-muted py-4">Không có giao dịch</td></tr>');
+                    return;
+                }
                 res.data.slice(0, 5).forEach(t => {
-                    const statusBadge = t.status === 'completed'
-                        ? '<span class="status-badge status-active">Hoàn thành</span>'
-                        : '<span class="status-badge status-warning">Chờ xử lý</span>';
+                    const statusBadge = '<span class="status-badge status-active">Hoàn thành</span>';
                     const amountClass = t.type === 'income' ? 'text-success' : 'text-danger';
                     const html = `
                     <tr>
@@ -317,10 +311,14 @@ include 'partials/navbar.php';
         });
 
         // New Users
-        $.get('/api/admin_data.php?action=get_users', function (res) {
+        $.post('/api/admin_data.php', { action: 'get_recent_users' }, function (res) {
             if (res.success) {
                 const list = $('#new-users');
                 list.empty();
+                if (!res.data || !res.data.length) {
+                    list.append('<tr><td colspan="3" class="text-center text-muted py-4">Chưa có người dùng mới</td></tr>');
+                    return;
+                }
                 res.data.slice(0, 5).forEach(u => {
                     const html = `
                     <tr>

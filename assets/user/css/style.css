@@ -202,6 +202,14 @@ ul {
     gap: var(--space-8);
 }
 
+.space-y-2>*+* {
+    margin-top: var(--space-2);
+}
+
+.space-y-3>*+* {
+    margin-top: var(--space-3);
+}
+
 .space-y-4>*+* {
     margin-top: var(--space-4);
 }
@@ -213,6 +221,10 @@ ul {
 /* Sizing */
 .w-full {
     width: 100%;
+}
+
+.w-auto {
+    width: auto;
 }
 
 .w-2 {
@@ -227,6 +239,30 @@ ul {
     width: 2.5rem;
 }
 
+.w-12 {
+    width: var(--space-12);
+}
+
+.w-14 {
+    width: 3.5rem;
+}
+
+.w-16 {
+    width: var(--space-16);
+}
+
+.w-20 {
+    width: var(--space-20);
+}
+
+.w-24 {
+    width: var(--space-24);
+}
+
+.w-32 {
+    width: 8rem;
+}
+
 .h-2 {
     height: 0.5rem;
 }
@@ -237,6 +273,30 @@ ul {
 
 .h-10 {
     height: 2.5rem;
+}
+
+.h-12 {
+    height: var(--space-12);
+}
+
+.h-14 {
+    height: 3.5rem;
+}
+
+.h-16 {
+    height: var(--space-16);
+}
+
+.h-20 {
+    height: var(--space-20);
+}
+
+.h-24 {
+    height: var(--space-24);
+}
+
+.h-32 {
+    height: 8rem;
 }
 
 .h-full {
@@ -258,6 +318,10 @@ ul {
 
 .inline-block {
     display: inline-block;
+}
+
+.cursor-pointer {
+    cursor: pointer;
 }
 
 /* Positioning */
@@ -343,6 +407,10 @@ ul {
     font-size: var(--text-4xl);
 }
 
+.text-5xl {
+    font-size: var(--text-5xl);
+}
+
 /* Font Weights */
 .font-light {
     font-weight: var(--font-light);
@@ -366,6 +434,11 @@ ul {
 
 .font-extrabold {
     font-weight: var(--font-extrabold);
+}
+
+/* Font Family */
+.font-mono {
+    font-family: var(--font-mono);
 }
 
 /* Text Colors */
@@ -491,6 +564,11 @@ ul {
     color: white;
 }
 
+.bg-primary\/10 {
+    background-color: rgba(41, 82, 163, 0.1);
+    color: var(--primary-700);
+}
+
 .bg-green-100 {
     background-color: var(--success-light);
 }
@@ -538,6 +616,10 @@ ul {
     background-color: var(--gray-100);
 }
 
+.hover\:border-gray-400:hover {
+    border-color: var(--gray-400);
+}
+
 /* Spacing */
 .m-0 {
     margin: 0;
@@ -557,6 +639,20 @@ ul {
 
 .mt-6 {
     margin-top: var(--space-6);
+}
+
+.my-4 {
+    margin-top: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.my-6 {
+    margin-top: var(--space-6);
+    margin-bottom: var(--space-6);
+}
+
+.mb-1 {
+    margin-bottom: var(--space-1);
 }
 
 .mb-2 {
@@ -601,6 +697,11 @@ ul {
 
 .ml-2 {
     margin-left: var(--space-2);
+}
+
+.mx-auto {
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .p-2 {
@@ -707,6 +808,10 @@ ul {
 
 /* Shadows */
 .shadow {
+    box-shadow: var(--shadow-md);
+}
+
+.shadow-md {
     box-shadow: var(--shadow-md);
 }
 

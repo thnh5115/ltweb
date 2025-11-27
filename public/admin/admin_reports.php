@@ -67,6 +67,25 @@ include 'partials/navbar.php';
             <!-- Loaded dynamically -->
         </div>
 
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Thu/Chi theo tháng</h3>
+                </div>
+                <div style="height: 320px; padding: var(--space-4);">
+                    <canvas id="reportMonthChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Phân bổ theo danh mục</h3>
+                </div>
+                <div style="height: 320px; padding: var(--space-4); display:flex;align-items:center;justify-content:center;">
+                    <canvas id="reportCategoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
         <!-- Report Table -->
         <div class="table-responsive">
             <table class="table admin-table" id="reportTable">
@@ -79,8 +98,7 @@ include 'partials/navbar.php';
             </table>
         </div>
     </div>
-
-    <!-- Quick Reports -->
+<!-- Quick Reports -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         <div class="card">
             <div class="p-6">
@@ -170,117 +188,167 @@ include 'partials/navbar.php';
 </style>
 
 <script>
-    $(document).ready(function () {
-        // Set default dates (last 30 days)
-        const today = new Date();
-        const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    let monthChart = null;
+    let categoryChart = null;
 
-        $('#dateTo').val(today.toISOString().split('T')[0]);
-        $('#dateFrom').val(thirtyDaysAgo.toISOString().split('T')[0]);
+    $(document).ready(function () {
+        loadReports();
     });
 
-    function generateReport() {
+    function getFilters() {
+        return {
+            date_from: $('#dateFrom').val(),
+            date_to: $('#dateTo').val(),
+            year: ($('#dateFrom').val() || '').slice(0, 4) || new Date().getFullYear(),
+            type: $('#reportType').val() === 'transaction_report' ? '' : ''
+        };
+    }
+
+    function loadReports() {
+        const filters = getFilters();
         const reportType = $('#reportType').val();
-        const dateFrom = $('#dateFrom').val();
-        const dateTo = $('#dateTo').val();
+        $('#reportTitle').text(getReportTitle(reportType));
+        $('#reportDate').text(`${filters.date_from || '---'} đến ${filters.date_to || '---'}`);
 
-        if (!dateFrom || !dateTo) {
-            showToast('error', 'Vui lòng chọn khoảng thời gian');
-            return;
-        }
+        loadSummary(filters);
+        loadMonthChart(filters);
+        loadCategoryChart(filters);
+    }
 
-        showToast('info', 'Đang tạo báo cáo...');
-
-        $.get('/api/admin_data.php', {
-            action: 'get_report_data',
-            type: reportType,
-            date_from: dateFrom,
-            date_to: dateTo
-        }, function (response) {
-            if (response.success) {
-                renderReport(response.data, reportType);
-                $('#reportPreview').fadeIn();
-            } else {
-                showToast('error', response.message);
+    function loadSummary(filters) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: Object.assign({ action: 'admin_get_report_summary' }, filters)
+        }).done(function (res) {
+            if (res.success) {
+                const data = res.data || {};
+                const html = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="report-stat-card">
+                        <div class="report-stat-label">Tổng thu</div>
+                        <div class="report-stat-value text-success">${formatMoney(data.total_income || 0)}</div>
+                    </div>
+                    <div class="report-stat-card">
+                        <div class="report-stat-label">Tổng chi</div>
+                        <div class="report-stat-value text-danger">${formatMoney(data.total_expense || 0)}</div>
+                    </div>
+                    <div class="report-stat-card">
+                        <div class="report-stat-label">Net (Thu - Chi)</div>
+                        <div class="report-stat-value">${formatMoney((data.net || 0))}</div>
+                    </div>
+                </div>`;
+                $('#reportSummary').html(html);
+                $('#reportPreview').show();
             }
+        }).fail(function () {
+            showToast('error', 'Không tải được summary');
         });
     }
 
-    function renderReport(data, reportType) {
-        // Update report title and date
-        $('#reportTitle').text(getReportTitle(reportType));
-        $('#reportDate').text(`${$('#dateFrom').val()} đến ${$('#dateTo').val()}`);
+    function loadMonthChart(filters) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: Object.assign({ action: 'admin_get_report_by_month' }, filters)
+        }).done(function (res) {
+            if (res.success) {
+                const ctx = document.getElementById('reportMonthChart');
+                const labels = res.data.labels || [];
+                const incomeValues = res.data.income_values || [];
+                const expenseValues = res.data.expense_values || [];
+                if (monthChart) monthChart.destroy();
+                monthChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Thu',
+                                data: incomeValues,
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16,185,129,0.1)',
+                                tension: 0.4,
+                                fill: true
+                            },
+                            {
+                                label: 'Chi',
+                                data: expenseValues,
+                                borderColor: '#ef4444',
+                                backgroundColor: 'rgba(239,68,68,0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+        }).fail(function () {
+            showToast('error', 'Không tải được biểu đồ tháng');
+        });
+    }
 
-        // Render summary stats
-        if (data.summary) {
-            renderSummary(data.summary);
-        }
+    function loadCategoryChart(filters) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: Object.assign({ action: 'admin_get_report_by_category' }, filters)
+        }).done(function (res) {
+            if (res.success) {
+                const labels = res.data.labels || [];
+                const values = res.data.values || [];
+                const ctx = document.getElementById('reportCategoryChart');
+                if (categoryChart) categoryChart.destroy();
+                categoryChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: labels.map(() => '#6C5CE7'),
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom' } }
+                    }
+                });
 
-        // Render table
-        renderReportTable(data.table, reportType);
+                renderCategoryTable(labels, values);
+                $('#reportPreview').show();
+            }
+        }).fail(function () {
+            showToast('error', 'Không tải được phân bổ danh mục');
+        });
+    }
+
+    function renderCategoryTable(labels, values) {
+        const thead = $('#reportTableHead');
+        const tbody = $('#reportTableBody');
+        thead.html('<tr><th>Danh mục</th><th>Số tiền</th></tr>');
+        tbody.empty();
+        labels.forEach((label, idx) => {
+            tbody.append(`<tr><td>${label}</td><td>${formatMoney(values[idx] || 0)}</td></tr>`);
+        });
     }
 
     function getReportTitle(type) {
         const titles = {
-            'monthly_summary': 'Báo cáo tổng quan tháng',
-            'user_activity': 'Báo cáo hoạt động người dùng',
-            'top_spenders': 'Top người dùng chi tiêu nhiều nhất',
-            'category_breakdown': 'Phân tích chi tiêu theo danh mục',
+            'monthly_summary': 'Báo cáo tổng quan',
+            'user_activity': 'Hoạt động người dùng',
+            'top_spenders': 'Top chi tiêu',
+            'category_breakdown': 'Phân tích danh mục',
             'budget_analysis': 'Phân tích ngân sách',
             'transaction_report': 'Báo cáo giao dịch chi tiết'
         };
         return titles[type] || 'Báo cáo';
-    }
-
-    function renderSummary(summary) {
-        const container = $('#reportSummary');
-        let html = '<div class="grid grid-cols-1 md:grid-cols-4 gap-4">';
-
-        Object.keys(summary).forEach(key => {
-            const item = summary[key];
-            const changeClass = item.change >= 0 ? 'positive' : 'negative';
-            const changeIcon = item.change >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
-
-            html += `
-            <div class="report-stat-card">
-                <div class="report-stat-label">${item.label}</div>
-                <div class="report-stat-value">${item.value}</div>
-                ${item.change !== undefined ? `
-                    <div class="report-stat-change ${changeClass}">
-                        <i class="fas ${changeIcon} mr-1"></i>
-                        ${Math.abs(item.change)}% so với kỳ trước
-                    </div>
-                ` : ''}
-            </div>
-        `;
-        });
-
-        html += '</div>';
-        container.html(html);
-    }
-
-    function renderReportTable(tableData, reportType) {
-        const thead = $('#reportTableHead');
-        const tbody = $('#reportTableBody');
-
-        // Render headers
-        let headerHtml = '<tr>';
-        tableData.headers.forEach(header => {
-            headerHtml += `<th>${header}</th>`;
-        });
-        headerHtml += '</tr>';
-        thead.html(headerHtml);
-
-        // Render rows
-        tbody.empty();
-        tableData.rows.forEach(row => {
-            let rowHtml = '<tr>';
-            row.forEach(cell => {
-                rowHtml += `<td>${cell}</td>`;
-            });
-            rowHtml += '</tr>';
-            tbody.append(rowHtml);
-        });
     }
 
     function quickReport(period) {
@@ -302,49 +370,21 @@ include 'partials/navbar.php';
         $('#dateFrom').val(dateFrom.toISOString().split('T')[0]);
         $('#dateTo').val(dateTo.toISOString().split('T')[0]);
         $('#reportType').val('monthly_summary');
+        loadReports();
+    }
 
-        generateReport();
+    function generateReport() {
+        loadReports();
     }
 
     function exportCSV() {
-        // TODO: Implement CSV export
-        // This would typically send the current report data to a backend endpoint
-        // that generates a CSV file and returns it for download
-
-        showToast('info', 'Đang xuất CSV...');
-
-        const reportType = $('#reportType').val();
-        const dateFrom = $('#dateFrom').val();
-        const dateTo = $('#dateTo').val();
-
-        // Simulate export
-        setTimeout(() => {
-            showToast('success', 'Xuất CSV thành công! (Chức năng demo)');
-
-            // In production, you would do:
-            // window.location.href = `/api/admin_data.php?action=export_csv&type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
-        }, 1000);
+        showToast('info', 'Chức năng export CSV chưa được triển khai.');
     }
 
     function exportPDF() {
-        // TODO: Implement PDF export
-        // This would typically use a library like TCPDF or mPDF on the backend
-        // to generate a PDF from the report data
-
-        showToast('info', 'Đang xuất PDF...');
-
-        const reportType = $('#reportType').val();
-        const dateFrom = $('#dateFrom').val();
-        const dateTo = $('#dateTo').val();
-
-        // Simulate export
-        setTimeout(() => {
-            showToast('success', 'Xuất PDF thành công! (Chức năng demo)');
-
-            // In production, you would do:
-            // window.location.href = `/api/admin_data.php?action=export_pdf&type=${reportType}&date_from=${dateFrom}&date_to=${dateTo}`;
-        }, 1000);
+        showToast('info', 'Chức năng export PDF chưa được triển khai.');
     }
 </script>
+
 
 <?php include 'partials/footer.php'; ?>

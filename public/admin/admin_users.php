@@ -239,38 +239,43 @@ include 'partials/navbar.php';
 <script>
     $(document).ready(function () {
         loadUsers();
-        loadStats();
 
         $('#searchInput, #filterStatus').on('change keyup', function () {
             loadUsers();
         });
     });
 
-    function loadStats() {
-        $.get('/api/admin_data.php?action=user_stats', function (res) {
-            if (res.success) {
-                $('#total-users').text(res.data.total);
-                $('#active-users').text(res.data.active);
-                $('#new-users').text(res.data.new);
-                $('#banned-users').text(res.data.banned);
-            }
-        });
+    function renderStats(summary) {
+        if (!summary) return;
+        $('#total-users').text(summary.total ?? 0);
+        $('#active-users').text(summary.active ?? 0);
+        $('#new-users').text(summary.new ?? 0);
+        $('#banned-users').text(summary.banned ?? 0);
     }
 
     function loadUsers() {
         const filters = {
-            action: 'get_users',
+            action: 'admin_get_users',
             search: $('#searchInput').val(),
             status: $('#filterStatus').val(),
-            date: $('#filterDate').val()
+            page: 1,
+            limit: 50
         };
 
-        $.get('/api/admin_data.php', filters, function (res) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: filters
+        }).done(function (res) {
             if (res.success) {
                 const list = $('#users-list');
                 list.empty();
 
-                if (res.data.length === 0) {
+                renderStats(res.data.summary);
+
+                const items = res.data.items || [];
+                if (items.length === 0) {
                     list.html(`
                     <tr>
                         <td colspan="7">
@@ -285,10 +290,10 @@ include 'partials/navbar.php';
                     return;
                 }
 
-                $('#showing-count').text(res.data.length);
+                $('#showing-count').text(items.length);
 
-                res.data.forEach(u => {
-                    const statusBadge = u.status === 'active'
+                items.forEach(u => {
+                    const statusBadge = (u.status || '').toUpperCase() === 'ACTIVE'
                         ? '<span class="status-badge status-active"><i class="fas fa-check-circle mr-1"></i>Hoạt động</span>'
                         : '<span class="status-badge status-banned"><i class="fas fa-ban mr-1"></i>Bị khóa</span>';
 
@@ -300,26 +305,26 @@ include 'partials/navbar.php';
                                     <i class="fas fa-user"></i>
                                 </div>
                                 <div>
-                                    <p class="font-medium">${u.name}</p>
+                                    <p class="font-medium">${u.fullname || u.name}</p>
                                     <p class="text-xs text-muted">ID: #${u.id}</p>
                                 </div>
                             </div>
                         </td>
                         <td class="text-muted">${u.email}</td>
-                        <td class="font-semibold">${u.transactions} giao dịch</td>
-                        <td class="font-mono font-bold text-danger">${formatMoney(u.expense)}</td>
+                        <td class="font-semibold">${u.transactions || 0} giao dịch</td>
+                        <td class="font-mono font-bold text-danger">${formatMoney(u.expense || 0)}</td>
                         <td class="text-sm">${u.created_at}</td>
                         <td>${statusBadge}</td>
                         <td class="text-center">
                             <div class="flex justify-center gap-2">
-                                <button class="btn btn-sm btn-outline" onclick='openUserModal(${JSON.stringify(u)})' title="Chi tiết">
+                                <button class="btn btn-sm btn-outline" onclick='openUserModal(${u.id})' title="Chi tiết">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                <button class="btn btn-sm btn-outline" title="Chỉnh sửa">
-                                    <i class="fas fa-edit"></i>
+                                <button class="btn btn-sm btn-outline" onclick="updateUserRole(${u.id}, '${u.role === 'ADMIN' ? 'USER' : 'ADMIN'}')" title="Đổi quyền">
+                                    <i class="fas fa-user-shield"></i>
                                 </button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})" title="Xóa">
-                                    <i class="fas fa-trash"></i>
+                                <button class="btn btn-sm btn-danger" onclick="updateUserStatus(${u.id}, '${(u.status || '').toUpperCase() === 'ACTIVE' ? 'BANNED' : 'ACTIVE'}')" title="Khóa/Mở">
+                                    <i class="fas fa-ban"></i>
                                 </button>
                             </div>
                         </td>
@@ -327,40 +332,81 @@ include 'partials/navbar.php';
                 `;
                     list.append(html);
                 });
+            } else {
+                alert(res.message || 'Tải danh sách thất bại');
             }
+        }).fail(function () {
+            alert('Lỗi hệ thống khi tải danh sách');
         });
     }
 
-    function openUserModal(user) {
-        $('#modal-user-id').text('#' + user.id);
-        $('#modal-user-name').text(user.name);
-        $('#modal-user-email').text(user.email);
-        $('#modal-user-transactions').text(user.transactions);
-        $('#modal-user-expense').text(formatMoney(user.expense));
-        $('#modal-user-created').text(user.created_at);
-        $('#userModal').addClass('active').css('display', 'flex');
+    function openUserModal(userId) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: { action: 'admin_get_user_detail', id: userId }
+        }).done(function (res) {
+            if (res.success) {
+                const user = res.data;
+                $('#modal-user-id').text('#' + user.id);
+                $('#modal-user-name').text(user.fullname || user.name);
+                $('#modal-user-email').text(user.email);
+                $('#modal-user-transactions').text(user.transactions);
+                $('#modal-user-expense').text(formatMoney(user.expense));
+                $('#modal-user-created').text(user.created_at);
+                $('#userModal').addClass('active').css('display', 'flex');
+            } else {
+                alert(res.message || 'Không lấy được thông tin người dùng');
+            }
+        }).fail(function () {
+            alert('Lỗi hệ thống');
+        });
     }
 
-    function deleteUser(id) {
-        if (confirm('Bạn có chắc muốn xóa người dùng này?')) {
-            $.post('/api/admin_data.php', {
-                action: 'delete_user',
-                id: id
-            }, function (res) {
-                if (res.success) {
-                    showToast('success', res.message);
-                    loadUsers();
-                    loadStats();
-                } else {
-                    showToast('error', res.message);
-                }
-            });
-        }
+    $('#addUserForm').on('submit', function (e) {
+        e.preventDefault();
+        alert('Chức năng tạo user mới chưa được hỗ trợ trong API hiện tại.');
+    });
+
+    function updateUserStatus(id, status) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: { action: 'admin_update_user_status', id, status }
+        }).done(function (res) {
+            if (res.success) {
+                loadUsers();
+            } else {
+                alert(res.message || 'Cập nhật trạng thái thất bại');
+            }
+        }).fail(function () {
+            alert('Lỗi hệ thống');
+        });
+    }
+
+    function updateUserRole(id, role) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: { action: 'admin_update_user_role', id, role }
+        }).done(function (res) {
+            if (res.success) {
+                loadUsers();
+            } else {
+                alert(res.message || 'Cập nhật quyền thất bại');
+            }
+        }).fail(function () {
+            alert('Lỗi hệ thống');
+        });
     }
 
     function closeModal(id) {
         $('#' + id).removeClass('active').css('display', 'none');
     }
 </script>
+
 
 <?php include 'partials/footer.php'; ?>

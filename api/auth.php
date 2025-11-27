@@ -78,7 +78,7 @@ switch ($action) {
 }
 
 /**
- * Handle user login
+ * Handle user login (user + admin)
  *
  * @param PDO   $pdo     Database connection
  * @param array $request Request payload (GET/POST/JSON merged)
@@ -128,6 +128,13 @@ function handleLogin($pdo, array $request)
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_name']  = $user['fullname'];
         $_SESSION['user_role']  = $user['role'];
+
+        // Nếu là admin, đặt thêm session dành riêng cho admin
+        if ($user['role'] === 'ADMIN') {
+            $_SESSION['admin_id']    = $user['id'];
+            $_SESSION['admin_email'] = $user['email'];
+            $_SESSION['admin_name']  = $user['fullname'];
+        }
 
         // Determine redirect URL based on role
         $redirect = '/public/user/dashboard.php'; // Default fallback

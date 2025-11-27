@@ -12,15 +12,22 @@ include 'partials/navbar.php';
     <h2 class="text-xl font-bold mb-6">Quản lý giao dịch toàn hệ thống</h2>
 
     <div class="card mb-6">
-        <div class="p-4 border-b grid grid-cols-1 md:grid-cols-4 gap-4">
-            <input type="text" class="form-control" placeholder="Tìm theo User, ID...">
-            <select class="form-control">
+        <div class="p-4 border-b grid grid-cols-1 md:grid-cols-5 gap-4">
+            <input type="text" id="searchInput" class="form-control" placeholder="Tìm theo user/email/ghi chú">
+            <select id="typeFilter" class="form-control">
                 <option value="">Tất cả loại</option>
-                <option value="income">Thu nhập</option>
-                <option value="expense">Chi tiêu</option>
+                <option value="INCOME">Thu nhập</option>
+                <option value="EXPENSE">Chi tiêu</option>
             </select>
-            <input type="date" class="form-control">
-            <button class="btn btn-primary w-full"><i class="fas fa-filter mr-2"></i> Lọc</button>
+            <select id="statusFilter" class="form-control">
+                <option value="">Tất cả trạng thái</option>
+                <option value="COMPLETED">Hoàn thành</option>
+                <option value="PENDING">Đang xử lý</option>
+                <option value="CANCELED">Đã hủy</option>
+                <option value="FLAGGED">Cờ</option>
+            </select>
+            <input type="date" id="dateFrom" class="form-control" placeholder="Từ ngày">
+            <input type="date" id="dateTo" class="form-control" placeholder="Đến ngày">
         </div>
     </div>
 
@@ -58,42 +65,95 @@ include 'partials/navbar.php';
 <script>
     $(document).ready(function () {
         loadTransactions();
+        $('#searchInput, #typeFilter, #statusFilter, #dateFrom, #dateTo').on('change keyup', function () {
+            loadTransactions();
+        });
     });
 
-    function loadTransactions() {
-        $.get('/api/admin_data.php?action=get_transactions', function (res) {
+    function loadTransactions(page = 1) {
+        const params = {
+            action: 'admin_get_transactions',
+            search: $('#searchInput').val(),
+            type: $('#typeFilter').val(),
+            status: $('#statusFilter').val(),
+            date_from: $('#dateFrom').val(),
+            date_to: $('#dateTo').val(),
+            page: page,
+            limit: 50
+        };
+
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: params
+        }).done(function (res) {
             if (res.success) {
                 const list = $('#transactions-list');
                 list.empty();
-                res.data.forEach(t => {
-                    const amountClass = t.type === 'income' ? 'text-success' : 'text-danger';
-                    const sign = t.type === 'income' ? '+' : '-';
-                    const statusBadge = t.status === 'completed'
+                const items = res.data.items || [];
+
+                if (items.length === 0) {
+                    list.html('<tr><td colspan="8" class="text-center text-muted py-4">Không có giao dịch</td></tr>');
+                    return;
+                }
+
+                items.forEach(t => {
+                    const amountClass = t.type === 'INCOME' ? 'text-success' : 'text-danger';
+                    const sign = t.type === 'INCOME' ? '+' : '-';
+                    const status = (t.status || '').toUpperCase();
+                    const statusBadge = status === 'COMPLETED'
                         ? '<span class="status-badge status-active">Hoàn thành</span>'
-                        : '<span class="status-badge status-banned">Nghi ngờ</span>';
+                        : status === 'PENDING'
+                            ? '<span class="status-badge status-warning">Đang xử lý</span>'
+                            : status === 'CANCELED'
+                                ? '<span class="status-badge status-banned">Đã hủy</span>'
+                                : '<span class="status-badge status-banned">Cờ</span>';
 
                     const html = `
                     <tr>
                         <td>#${t.id}</td>
                         <td>
-                            <div class="font-medium">${t.user}</div>
+                            <div class="font-medium">${t.user_name || ''}</div>
+                            <div class="text-xs text-muted">${t.user_email || ''}</div>
                         </td>
-                        <td>${t.type === 'income' ? 'Thu' : 'Chi'}</td>
-                        <td>${t.category}</td>
-                        <td class="${amountClass} font-bold">${sign}${formatMoney(t.amount)}</td>
-                        <td>${t.date}</td>
+                        <td>${t.type === 'INCOME' ? 'Thu' : 'Chi'}</td>
+                        <td>${t.category_name || '-'}</td>
+                        <td class="${amountClass} font-bold">${sign}${formatMoney(t.amount || 0)}</td>
+                        <td>${t.transaction_date || t.created_at || ''}</td>
                         <td>${statusBadge}</td>
                         <td>
-                            <button class="text-danger" title="Xóa"><i class="fas fa-trash"></i></button>
-                            <button class="text-warning ml-2" title="Đánh dấu nghi ngờ"><i class="fas fa-flag"></i></button>
+                            <button class="text-warning ml-2" title="Gắn cờ" onclick="updateTxnStatus(${t.id}, 'FLAGGED')"><i class="fas fa-flag"></i></button>
                         </td>
                     </tr>
                 `;
                     list.append(html);
                 });
+            } else {
+                alert(res.message || 'Tải giao dịch thất bại');
             }
+        }).fail(function () {
+            alert('Lỗi hệ thống');
+        });
+    }
+
+    function updateTxnStatus(id, status) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: { action: 'admin_update_transaction_status', id, status }
+        }).done(function (res) {
+            if (res.success) {
+                loadTransactions();
+            } else {
+                alert(res.message || 'Cập nhật thất bại');
+            }
+        }).fail(function () {
+            alert('Lỗi hệ thống');
         });
     }
 </script>
+
 
 <?php include 'partials/footer.php'; ?>

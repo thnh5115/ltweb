@@ -51,8 +51,8 @@ include 'partials/navbar.php';
 </div>
 
 <!-- Add/Edit Bill Modal -->
-<div class="modal" id="billModal">
-    <div class="modal-content" style="max-width: 500px;">
+<div class="modal modal-small" id="billModal">
+    <div class="modal-content">
         <div class="modal-header">
             <h3 class="modal-title">Thêm hóa đơn</h3>
             <button class="modal-close">&times;</button>

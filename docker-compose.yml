@@ -20,13 +20,16 @@ services:
       MYSQL_DATABASE: expense_manager
       MYSQL_USER: user
       MYSQL_PASSWORD: password
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
     volumes:
-      - db_data:/var/lib/mysql
+      - /var/lib/mysql
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
     restart: always
     networks:
       - app-network
+
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin

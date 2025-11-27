@@ -85,10 +85,10 @@ include 'partials/navbar.php';
 
 <!-- Add/Edit Goal Modal -->
 <div class="modal" id="goalModal">
-    <div class="modal-content" style="max-width: 600px;">
+    <div class="modal-content">
         <div class="modal-header">
             <h3 class="modal-title">Thêm mục tiêu</h3>
-            <button class="modal-close">&times;</button>
+            <button class="modal-close" onclick="closeModal('goalModal')" aria-label="Đóng">&times;</button>
         </div>
         <form id="goalForm">
             <input type="hidden" name="action" value="save_goal">
@@ -126,7 +126,7 @@ include 'partials/navbar.php';
                     placeholder="Mô tả về mục tiêu..."></textarea>
             </div>
             <div class="flex gap-3 justify-end">
-                <button type="button" class="btn btn-outline modal-close">Hủy</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal('goalModal')">Hủy</button>
                 <button type="submit" class="btn btn-primary">Lưu</button>
             </div>
         </form>
@@ -134,11 +134,11 @@ include 'partials/navbar.php';
 </div>
 
 <!-- Add Savings Modal -->
-<div class="modal" id="savingsModal">
-    <div class="modal-content" style="max-width: 400px;">
+<div class="modal modal-small" id="savingsModal">
+    <div class="modal-content" style="max-width: 500px;">
         <div class="modal-header">
             <h3 class="modal-title">Thêm tiền tiết kiệm</h3>
-            <button class="modal-close">&times;</button>
+            <button class="modal-close" onclick="closeModal('savingsModal')" aria-label="Đóng">&times;</button>
         </div>
         <form id="savingsForm">
             <input type="hidden" name="action" value="add_savings">
@@ -153,7 +153,7 @@ include 'partials/navbar.php';
                 <input type="text" name="note" id="savingsNote" class="form-control" placeholder="Lương tháng 11...">
             </div>
             <div class="flex gap-3 justify-end">
-                <button type="button" class="btn btn-outline modal-close">Hủy</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal('savingsModal')">Hủy</button>
                 <button type="submit" class="btn btn-primary">Thêm</button>
             </div>
         </form>
@@ -342,7 +342,7 @@ include 'partials/navbar.php';
             $('#goalId').val('');
             $('#goalStartDate').val(new Date().toISOString().split('T')[0]);
             $('.modal-title').text('Thêm mục tiêu');
-            $('#goalModal').fadeIn();
+            openModal('goalModal');
         });
 
         $('#goalForm').submit(function (e) {
@@ -350,7 +350,7 @@ include 'partials/navbar.php';
             $.post('/api/data.php', $(this).serialize(), function (response) {
                 if (response.success) {
                     showToast('success', response.message);
-                    $('#goalModal').fadeOut();
+                    closeModal('goalModal');
                     loadGoals();
                 } else {
                     showToast('error', response.message);
@@ -363,7 +363,7 @@ include 'partials/navbar.php';
             $.post('/api/data.php', $(this).serialize(), function (response) {
                 if (response.success) {
                     showToast('success', 'Đã thêm tiền tiết kiệm');
-                    $('#savingsModal').fadeOut();
+                    closeModal('savingsModal');
                     loadGoals();
                 } else {
                     showToast('error', response.message);
@@ -463,7 +463,7 @@ include 'partials/navbar.php';
     function addSavings(goalId) {
         $('#savingsGoalId').val(goalId);
         $('#savingsForm')[0].reset();
-        $('#savingsModal').fadeIn();
+        openModal('savingsModal');
     }
 
     function editGoal(id) {
@@ -478,7 +478,7 @@ include 'partials/navbar.php';
                 $('#goalDeadline').val(goal.deadline);
                 $('#goalDescription').val(goal.description);
                 $('.modal-title').text('Sửa mục tiêu');
-                $('#goalModal').fadeIn();
+                openModal('goalModal');
             }
         });
     }
@@ -495,6 +495,14 @@ include 'partials/navbar.php';
                 }
             });
         }
+    }
+
+    function openModal(id) {
+        $('#' + id).addClass('active').css('display', 'flex');
+    }
+
+    function closeModal(id) {
+        $('#' + id).removeClass('active').css('display', 'none');
     }
 </script>
 

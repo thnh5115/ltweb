@@ -26,7 +26,7 @@ function getCurrentUser()
 
 function jsonResponse($success, $message, $data = [], $extra = [])
 {
-    header('Content-Type: application/json');
+    header('Content-Type: application/json; charset=utf-8');
     $payload = [
         'success' => $success,
         'message' => $message,
@@ -37,7 +37,7 @@ function jsonResponse($success, $message, $data = [], $extra = [])
         $payload = array_merge($payload, $extra);
     }
 
-    echo json_encode($payload);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
     exit;
 }
 ?>

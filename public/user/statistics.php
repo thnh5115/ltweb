@@ -33,6 +33,10 @@ include 'partials/navbar.php';
                     </select>
                     <input type="date" id="startDate" class="form-control" placeholder="Từ ngày">
                     <input type="date" id="endDate" class="form-control" placeholder="Đến ngày">
+                    <select id="export_format" class="form-control" style="width: auto;">
+                        <option value="csv">CSV</option>
+                        <option value="json">JSON</option>
+                    </select>
                     <button class="btn btn-primary" onclick="loadStatistics()">
                         <i class="fas fa-filter mr-2"></i> Lọc
                     </button>
@@ -204,8 +208,13 @@ include 'partials/navbar.php';
         const startDate = $('#startDate').val();
         const endDate = $('#endDate').val();
 
+        let urlParams = 'period=' + period;
+        if (period === 'custom' && startDate && endDate) {
+            urlParams += '&start_date=' + startDate + '&end_date=' + endDate;
+        }
+
         // Load Summary Stats
-        $.get('/api/data.php?action=statistics_summary&period=' + period, function (res) {
+        $.get('/api/data.php?action=statistics_summary&' + urlParams, function (res) {
             if (res.success) {
                 $('#total-income').text(formatMoney(res.data.income));
                 $('#total-expense').text(formatMoney(res.data.expense));
@@ -217,14 +226,14 @@ include 'partials/navbar.php';
         });
 
         // Load Charts
-        $.get('/api/data.php?action=statistics_charts&period=' + period, function (res) {
+        $.get('/api/data.php?action=statistics_charts&' + urlParams, function (res) {
             if (res.success) {
                 renderCharts(res.data);
             }
         });
 
         // Load Top Categories
-        $.get('/api/data.php?action=top_categories&period=' + period, function (res) {
+        $.get('/api/data.php?action=top_categories&' + urlParams, function (res) {
             if (res.success) {
                 const tbody = $('#top-categories');
                 tbody.empty();
@@ -382,8 +391,28 @@ include 'partials/navbar.php';
     }
 
     function exportReport() {
+        const period = document.getElementById('periodSelect').value;
+        const startDate = document.getElementById('startDate')?.value || '';
+        const endDate = document.getElementById('endDate')?.value || '';
+        const format = document.getElementById('export_format')?.value || 'csv';
+
         showToast('info', 'Đang xuất báo cáo...');
-        // Implementation for export
+
+        // Build URL with parameters
+        let url = `../api/data.php?action=export_statistics&period=${period}&format=${format}`;
+        if (period === 'custom' && startDate && endDate) {
+            url += `&start_date=${startDate}&end_date=${endDate}`;
+        }
+
+        // Create a temporary link to trigger download
+        const link = document.createElement('a');
+        link.href = url;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast('success', 'Báo cáo đã được tải xuống!');
     }
 </script>
 

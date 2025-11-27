@@ -342,6 +342,14 @@ include 'partials/navbar.php';
             showToast('error', 'Lỗi hệ thống');
         });
     }
+
+    function openModal(id) {
+        $('#' + id).addClass('active').css('display', 'flex');
+    }
+
+    function closeModal(id) {
+        $('#' + id).removeClass('active').css('display', 'none');
+    }
 </script>
 
 

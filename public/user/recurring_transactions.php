@@ -84,10 +84,10 @@ include 'partials/navbar.php';
 
 <!-- Add/Edit Recurring Transaction Modal -->
 <div class="modal" id="recurringModal">
-    <div class="modal-content" style="max-width: 600px;">
+    <div class="modal-content">
         <div class="modal-header">
             <h3 class="modal-title">Thêm giao dịch định kỳ</h3>
-            <button class="modal-close">&times;</button>
+            <button class="modal-close" onclick="closeModal('recurringModal')" aria-label="Đóng">&times;</button>
         </div>
         <form id="recurringForm">
             <input type="hidden" name="action" value="save_recurring">
@@ -140,7 +140,7 @@ include 'partials/navbar.php';
                     placeholder="Ghi chú về giao dịch..."></textarea>
             </div>
             <div class="flex gap-3 justify-end">
-                <button type="button" class="btn btn-outline modal-close">Hủy</button>
+                <button type="button" class="btn btn-outline" onclick="closeModal('recurringModal')">Hủy</button>
                 <button type="submit" class="btn btn-primary">Lưu</button>
             </div>
         </form>
@@ -238,7 +238,7 @@ include 'partials/navbar.php';
             $('#recurringId').val('');
             $('#recurringStartDate').val(new Date().toISOString().split('T')[0]);
             $('.modal-title').text('Thêm giao dịch định kỳ');
-            $('#recurringModal').fadeIn();
+            openModal('recurringModal');
         });
 
         $('#recurringForm').submit(function (e) {
@@ -246,7 +246,7 @@ include 'partials/navbar.php';
             $.post('/api/data.php', $(this).serialize(), function (response) {
                 if (response.success) {
                     showToast('success', response.message);
-                    $('#recurringModal').fadeOut();
+                    closeModal('recurringModal');
                     loadRecurringTransactions();
                 } else {
                     showToast('error', response.message);
@@ -385,7 +385,7 @@ include 'partials/navbar.php';
                 $('#recurringStatus').val(item.status);
                 $('#recurringNote').val(item.note);
                 $('.modal-title').text('Sửa giao dịch định kỳ');
-                $('#recurringModal').fadeIn();
+                openModal('recurringModal');
             }
         });
     }
@@ -402,6 +402,14 @@ include 'partials/navbar.php';
                 }
             });
         }
+    }
+
+    function openModal(id) {
+        $('#' + id).addClass('active').css('display', 'flex');
+    }
+
+    function closeModal(id) {
+        $('#' + id).removeClass('active').css('display', 'none');
     }
 </script>
 

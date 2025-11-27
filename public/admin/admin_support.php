@@ -115,7 +115,7 @@ include 'partials/navbar.php';
 
 <!-- Ticket Detail Modal -->
 <div class="modal" id="ticketModal">
-    <div class="modal-content" style="max-width: 700px;">
+    <div class="modal-content">
         <div class="modal-header">
             <h3 class="modal-title">Chi tiết ticket</h3>
             <button class="modal-close">&times;</button>

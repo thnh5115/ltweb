@@ -4,7 +4,6 @@
  * Handles categories, transactions, dashboard stats, statistics, charts, and budgets
  */
 
-session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../db/config.php';
@@ -194,6 +193,15 @@ elseif ($action === 'dashboard_stats') {
 
 } elseif ($action === 'chart_data') {
     handleChartData($pdo, $userId);
+
+} elseif ($action === 'statistics_summary') {
+    handleStatisticsSummary($pdo, $userId);
+
+} elseif ($action === 'statistics_charts') {
+    handleStatisticsCharts($pdo, $userId);
+
+} elseif ($action === 'export_statistics') {
+    handleExportStatistics($pdo, $userId);
 }
 
 // ============================================
@@ -2140,6 +2148,433 @@ function handleDeleteBill($pdo, $userId)
         jsonResponse(false, 'Loi khi xoa hoa don');
     }
 }
+
+// ============================================
+// STATISTICS HANDLERS
+// ============================================
+
+function handleStatisticsSummary($pdo, $userId)
+{
+    try {
+        $period = $_GET['period'] ?? 'this_month';
+        $startDate = $_GET['start_date'] ?? null;
+        $endDate = $_GET['end_date'] ?? null;
+
+        // Calculate date range based on period or custom dates
+        if ($period === 'custom' && $startDate && $endDate) {
+            $dateFrom = $startDate;
+            $dateTo = $endDate;
+        } else {
+            switch ($period) {
+                case 'this_month':
+                    $dateFrom = date('Y-m-01');
+                    $dateTo = date('Y-m-t');
+                    break;
+                case 'last_month':
+                    $dateFrom = date('Y-m-01', strtotime('last month'));
+                    $dateTo = date('Y-m-t', strtotime('last month'));
+                    break;
+                case '3_months':
+                    $dateFrom = date('Y-m-d', strtotime('-3 months'));
+                    $dateTo = date('Y-m-d');
+                    break;
+                case '6_months':
+                    $dateFrom = date('Y-m-d', strtotime('-6 months'));
+                    $dateTo = date('Y-m-d');
+                    break;
+                case 'this_year':
+                    $dateFrom = date('Y-01-01');
+                    $dateTo = date('Y-12-31');
+                    break;
+                default:
+                    $dateFrom = date('Y-m-01');
+                    $dateTo = date('Y-m-t');
+            }
+        }
+
+        // Get current period stats
+        $stmt = $pdo->prepare("
+            SELECT
+                SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+                SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense,
+                COUNT(*) as count
+            FROM transactions
+            WHERE user_id = :user_id
+              AND transaction_date BETWEEN :date_from AND :date_to
+        ");
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':date_from' => $dateFrom,
+            ':date_to' => $dateTo
+        ]);
+        $current = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $currentIncome = (float) ($current['income'] ?? 0);
+        $currentExpense = (float) ($current['expense'] ?? 0);
+        $currentCount = (int) ($current['count'] ?? 0);
+
+        // Get previous period for comparison
+        $prevIncome = 0;
+        $prevExpense = 0;
+
+        if ($period === 'custom' && $startDate && $endDate) {
+            // For custom range, compare with same range last year
+            $prevFrom = date('Y-m-d', strtotime($startDate . ' -1 year'));
+            $prevTo = date('Y-m-d', strtotime($endDate . ' -1 year'));
+        } elseif ($period === 'this_month') {
+            // Compare with last month
+            $prevFrom = date('Y-m-01', strtotime('last month'));
+            $prevTo = date('Y-m-t', strtotime('last month'));
+        } elseif ($period === 'this_year') {
+            // Compare with last year
+            $prevFrom = date('Y-01-01', strtotime('-1 year'));
+            $prevTo = date('Y-12-31', strtotime('-1 year'));
+        } else {
+            // For other periods, compare with same period last year
+            $prevFrom = date('Y-m-d', strtotime($dateFrom . ' -1 year'));
+            $prevTo = date('Y-m-d', strtotime($dateTo . ' -1 year'));
+        }
+
+        $prevStmt = $pdo->prepare("
+            SELECT
+                SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+                SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+            FROM transactions
+            WHERE user_id = :user_id
+              AND transaction_date BETWEEN :date_from AND :date_to
+        ");
+        $prevStmt->execute([
+            ':user_id' => $userId,
+            ':date_from' => $prevFrom,
+            ':date_to' => $prevTo
+        ]);
+        $prev = $prevStmt->fetch(PDO::FETCH_ASSOC);
+
+        $prevIncome = (float) ($prev['income'] ?? 0);
+        $prevExpense = (float) ($prev['expense'] ?? 0);
+
+        // Calculate percentage changes
+        $incomeChange = $prevIncome > 0 ? (($currentIncome - $prevIncome) / $prevIncome) * 100 : 0;
+        $expenseChange = $prevExpense > 0 ? (($currentExpense - $prevExpense) / $prevExpense) * 100 : 0;
+
+        jsonResponse(true, 'Success', [
+            'income' => $currentIncome,
+            'expense' => $currentExpense,
+            'balance' => $currentIncome - $currentExpense,
+            'count' => $currentCount,
+            'income_change' => round($incomeChange, 1),
+            'expense_change' => round($expenseChange, 1),
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo
+        ]);
+
+    } catch (PDOException $e) {
+        error_log("Statistics Summary Error: " . $e->getMessage());
+        jsonResponse(false, 'Lỗi khi tải thống kê tổng quan');
+    }
+}
+
+function handleStatisticsCharts($pdo, $userId)
+{
+    try {
+        $period = $_GET['period'] ?? 'this_month';
+        $startDate = $_GET['start_date'] ?? null;
+        $endDate = $_GET['end_date'] ?? null;
+
+        // Calculate date range based on period or custom dates
+        if ($period === 'custom' && $startDate && $endDate) {
+            $dateFrom = $startDate;
+            $dateTo = $endDate;
+        } else {
+            switch ($period) {
+                case 'this_month':
+                    $dateFrom = date('Y-m-01');
+                    $dateTo = date('Y-m-t');
+                    break;
+                case 'last_month':
+                    $dateFrom = date('Y-m-01', strtotime('last month'));
+                    $dateTo = date('Y-m-t', strtotime('last month'));
+                    break;
+                case '3_months':
+                    $dateFrom = date('Y-m-d', strtotime('-3 months'));
+                    $dateTo = date('Y-m-d');
+                    break;
+                case '6_months':
+                    $dateFrom = date('Y-m-d', strtotime('-6 months'));
+                    $dateTo = date('Y-m-d');
+                    break;
+                case 'this_year':
+                    $dateFrom = date('Y-01-01');
+                    $dateTo = date('Y-12-31');
+                    break;
+                default:
+                    $dateFrom = date('Y-m-01');
+                    $dateTo = date('Y-m-t');
+            }
+        }
+
+        // Time series data (line chart)
+        $timeStmt = $pdo->prepare("
+            SELECT 
+                DATE(transaction_date) as date,
+                SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+                SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+            FROM transactions
+            WHERE user_id = :user_id 
+              AND transaction_date BETWEEN :date_from AND :date_to
+            GROUP BY DATE(transaction_date)
+            ORDER BY DATE(transaction_date) ASC
+        ");
+        $timeStmt->execute([
+            ':user_id' => $userId,
+            ':date_from' => $dateFrom,
+            ':date_to' => $dateTo
+        ]);
+        $timeData = $timeStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $timeLabels = [];
+        $timeIncome = [];
+        $timeExpense = [];
+
+        foreach ($timeData as $row) {
+            $timeLabels[] = date('d/m', strtotime($row['date']));
+            $timeIncome[] = (float) $row['income'];
+            $timeExpense[] = (float) $row['expense'];
+        }
+
+        // Category distribution (pie chart)
+        $catStmt = $pdo->prepare("
+            SELECT c.name, c.color, SUM(t.amount) as amount
+            FROM transactions t
+            INNER JOIN categories c ON t.category_id = c.id
+            WHERE t.user_id = :user_id AND t.type = 'EXPENSE'
+              AND t.transaction_date BETWEEN :date_from AND :date_to
+            GROUP BY c.id, c.name, c.color
+            ORDER BY SUM(t.amount) DESC
+        ");
+        $catStmt->execute([
+            ':user_id' => $userId,
+            ':date_from' => $dateFrom,
+            ':date_to' => $dateTo
+        ]);
+        $catData = $catStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $catLabels = [];
+        $catValues = [];
+        $catColors = [];
+
+        foreach ($catData as $row) {
+            $catLabels[] = $row['name'];
+            $catValues[] = (float) $row['amount'];
+            $catColors[] = $row['color'];
+        }
+
+        // Trend chart (expense by month/week)
+        $trendLabels = [];
+        $trendValues = [];
+
+        if ($period === 'this_year' || $period === '6_months' || $period === '3_months') {
+            // Monthly trend
+            $trendStmt = $pdo->prepare("
+                SELECT 
+                    DATE_FORMAT(transaction_date, '%Y-%m') as period,
+                    SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+                FROM transactions
+                WHERE user_id = :user_id 
+                  AND transaction_date BETWEEN :date_from AND :date_to
+                  AND type = 'EXPENSE'
+                GROUP BY DATE_FORMAT(transaction_date, '%Y-%m')
+                ORDER BY period ASC
+            ");
+            $trendStmt->execute([
+                ':user_id' => $userId,
+                ':date_from' => $dateFrom,
+                ':date_to' => $dateTo
+            ]);
+            $trendData = $trendStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($trendData as $row) {
+                $trendLabels[] = date('m/Y', strtotime($row['period'] . '-01'));
+                $trendValues[] = (float) $row['expense'];
+            }
+        } else {
+            // Weekly trend for shorter periods
+            $trendStmt = $pdo->prepare("
+                SELECT 
+                    YEARWEEK(transaction_date) as week,
+                    SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+                FROM transactions
+                WHERE user_id = :user_id 
+                  AND transaction_date BETWEEN :date_from AND :date_to
+                  AND type = 'EXPENSE'
+                GROUP BY YEARWEEK(transaction_date)
+                ORDER BY week ASC
+            ");
+            $trendStmt->execute([
+                ':user_id' => $userId,
+                ':date_from' => $dateFrom,
+                ':date_to' => $dateTo
+            ]);
+            $trendData = $trendStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($trendData as $row) {
+                $trendLabels[] = 'Tuần ' . substr($row['week'], -2);
+                $trendValues[] = (float) $row['expense'];
+            }
+        }
+
+        // Income sources (bar chart)
+        $incomeStmt = $pdo->prepare("
+            SELECT c.name, SUM(t.amount) as amount
+            FROM transactions t
+            INNER JOIN categories c ON t.category_id = c.id
+            WHERE t.user_id = :user_id AND t.type = 'INCOME'
+              AND t.transaction_date BETWEEN :date_from AND :date_to
+            GROUP BY c.id, c.name
+            ORDER BY SUM(t.amount) DESC
+        ");
+        $incomeStmt->execute([
+            ':user_id' => $userId,
+            ':date_from' => $dateFrom,
+            ':date_to' => $dateTo
+        ]);
+        $incomeData = $incomeStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $incomeLabels = [];
+        $incomeValues = [];
+
+        foreach ($incomeData as $row) {
+            $incomeLabels[] = $row['name'];
+            $incomeValues[] = (float) $row['amount'];
+        }
+
+        jsonResponse(true, 'Success', [
+            'time' => [
+                'labels' => $timeLabels,
+                'income' => $timeIncome,
+                'expense' => $timeExpense
+            ],
+            'categories' => [
+                'labels' => $catLabels,
+                'values' => $catValues,
+                'colors' => $catColors
+            ],
+            'trend' => [
+                'labels' => $trendLabels,
+                'values' => $trendValues
+            ],
+            'income' => [
+                'labels' => $incomeLabels,
+                'values' => $incomeValues
+            ]
+        ]);
+
+    } catch (PDOException $e) {
+        error_log("Statistics Charts Error: " . $e->getMessage());
+        jsonResponse(false, 'Lỗi khi tải dữ liệu biểu đồ');
+    }
+}
+
+function handleTopCategories($pdo, $userId)
+{
+    try {
+        $period = $_GET['period'] ?? 'this_month';
+        $startDate = $_GET['start_date'] ?? null;
+        $endDate = $_GET['end_date'] ?? null;
+
+        // Calculate date range based on period or custom dates
+        if ($period === 'custom' && $startDate && $endDate) {
+            $dateFrom = $startDate;
+            $dateTo = $endDate;
+        } else {
+            switch ($period) {
+                case 'this_month':
+                    $dateFrom = date('Y-m-01');
+                    $dateTo = date('Y-m-t');
+                    break;
+                case 'last_month':
+                    $dateFrom = date('Y-m-01', strtotime('last month'));
+                    $dateTo = date('Y-m-t', strtotime('last month'));
+                    break;
+                case '3_months':
+                    $dateFrom = date('Y-m-d', strtotime('-3 months'));
+                    $dateTo = date('Y-m-d');
+                    break;
+                case '6_months':
+                    $dateFrom = date('Y-m-d', strtotime('-6 months'));
+                    $dateTo = date('Y-m-d');
+                    break;
+                case 'this_year':
+                    $dateFrom = date('Y-01-01');
+                    $dateTo = date('Y-12-31');
+                    break;
+                default:
+                    $dateFrom = date('Y-m-01');
+                    $dateTo = date('Y-m-t');
+            }
+        }
+
+        // Get total expense for percentage calculation
+        $totalStmt = $pdo->prepare("
+            SELECT SUM(amount) as total
+            FROM transactions
+            WHERE user_id = :user_id AND type = 'EXPENSE'
+              AND transaction_date BETWEEN :date_from AND :date_to
+        ");
+        $totalStmt->execute([
+            ':user_id' => $userId,
+            ':date_from' => $dateFrom,
+            ':date_to' => $dateTo
+        ]);
+        $totalRow = $totalStmt->fetch(PDO::FETCH_ASSOC);
+        $totalExpense = (float) ($totalRow['total'] ?? 0);
+
+        // Get top categories
+        $stmt = $pdo->prepare("
+            SELECT 
+                c.name,
+                c.icon,
+                c.color,
+                COUNT(t.id) as count,
+                SUM(t.amount) as amount
+            FROM transactions t
+            INNER JOIN categories c ON t.category_id = c.id
+            WHERE t.user_id = :user_id AND t.type = 'EXPENSE'
+              AND t.transaction_date BETWEEN :date_from AND :date_to
+            GROUP BY c.id, c.name, c.icon, c.color
+            ORDER BY SUM(t.amount) DESC
+            LIMIT 10
+        ");
+        $stmt->execute([
+            ':user_id' => $userId,
+            ':date_from' => $dateFrom,
+            ':date_to' => $dateTo
+        ]);
+        $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $result = [];
+        foreach ($categories as $cat) {
+            $amount = (float) $cat['amount'];
+            $percentage = $totalExpense > 0 ? ($amount / $totalExpense) * 100 : 0;
+
+            $result[] = [
+                'name' => $cat['name'],
+                'icon' => $cat['icon'],
+                'color' => $cat['color'],
+                'count' => (int) $cat['count'],
+                'amount' => $amount,
+                'percentage' => round($percentage, 1)
+            ];
+        }
+
+        jsonResponse(true, 'Success', $result);
+
+    } catch (PDOException $e) {
+        error_log("Top Categories Error: " . $e->getMessage());
+        jsonResponse(false, 'Lỗi khi tải danh mục hàng đầu');
+    }
+}
+
 // ============================================
 // DASHBOARD & STATS HANDLERS
 // ============================================
@@ -2209,6 +2644,7 @@ function handleRecentTransactions($pdo, $userId)
 function handleChartData($pdo, $userId)
 {
     try {
+        // Pie Chart Data
         $pieStmt = $pdo->prepare("
             SELECT c.name, c.color, SUM(t.amount) as amount
             FROM transactions t
@@ -2227,18 +2663,231 @@ function handleChartData($pdo, $userId)
             ];
         }
 
+        // Line Chart Data - Last 30 days
+        $lineStmt = $pdo->prepare("
+            SELECT 
+                DATE(t.transaction_date) as date,
+                SUM(CASE WHEN t.type = 'INCOME' THEN t.amount ELSE 0 END) as income,
+                SUM(CASE WHEN t.type = 'EXPENSE' THEN t.amount ELSE 0 END) as expense
+            FROM transactions t
+            WHERE t.user_id = :user_id 
+              AND t.transaction_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            GROUP BY DATE(t.transaction_date)
+            ORDER BY DATE(t.transaction_date) ASC
+        ");
+        $lineStmt->execute([':user_id' => $userId]);
+        $lineData = $lineStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $labels = [];
+        $income = [];
+        $expense = [];
+
+        foreach ($lineData as $row) {
+            $labels[] = date('d/m', strtotime($row['date']));
+            $income[] = (float) $row['income'];
+            $expense[] = (float) $row['expense'];
+        }
+
         jsonResponse(true, 'Success', [
             'pie' => $expenseByCategory,
             'line' => [
-                'labels' => [],
-                'income' => [],
-                'expense' => []
+                'labels' => $labels,
+                'income' => $income,
+                'expense' => $expense
             ]
         ]);
 
     } catch (PDOException $e) {
         error_log("Chart Data Error: " . $e->getMessage());
         jsonResponse(false, 'Lỗi khi tải dữ liệu biểu đồ');
+    }
+}
+
+// ============================================
+// EXPORT HANDLERS
+// ============================================
+
+function handleExportStatistics($pdo, $userId)
+{
+    try {
+        $period = $_GET['period'] ?? 'this_month';
+        $startDate = $_GET['start_date'] ?? null;
+        $endDate = $_GET['end_date'] ?? null;
+        $format = $_GET['format'] ?? 'csv'; // csv, json, pdf
+
+        // Calculate date range based on period or custom dates
+        if ($period === 'custom' && $startDate && $endDate) {
+            $dateFrom = $startDate;
+            $dateTo = $endDate;
+        } else {
+            switch ($period) {
+                case 'this_month':
+                    $dateFrom = date('Y-m-01');
+                    $dateTo = date('Y-m-t');
+                    break;
+                case 'last_month':
+                    $dateFrom = date('Y-m-01', strtotime('last month'));
+                    $dateTo = date('Y-m-t', strtotime('last month'));
+                    break;
+                case '3_months':
+                    $dateFrom = date('Y-m-d', strtotime('-3 months'));
+                    $dateTo = date('Y-m-d');
+                    break;
+                case '6_months':
+                    $dateFrom = date('Y-m-d', strtotime('-6 months'));
+                    $dateTo = date('Y-m-d');
+                    break;
+                case 'this_year':
+                    $dateFrom = date('Y-01-01');
+                    $dateTo = date('Y-12-31');
+                    break;
+                default:
+                    $dateFrom = date('Y-m-01');
+                    $dateTo = date('Y-m-t');
+            }
+        }
+
+        if ($format === 'csv') {
+            // Get transactions data
+            $stmt = $pdo->prepare("
+                SELECT
+                    t.transaction_date,
+                    t.type,
+                    t.amount,
+                    t.note,
+                    c.name as category_name,
+                    c.type as category_type
+                FROM transactions t
+                INNER JOIN categories c ON t.category_id = c.id
+                WHERE t.user_id = :user_id
+                  AND t.transaction_date BETWEEN :date_from AND :date_to
+                ORDER BY t.transaction_date DESC, t.created_at DESC
+            ");
+            $stmt->execute([
+                ':user_id' => $userId,
+                ':date_from' => $dateFrom,
+                ':date_to' => $dateTo
+            ]);
+            $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Generate CSV
+            $csvData = "Ngày,Giao dịch,Loại,Số tiền,Danh mục,Ghi chú\n";
+
+            foreach ($transactions as $trans) {
+                $type = $trans['type'] === 'INCOME' ? 'Thu nhập' : 'Chi tiêu';
+                $amount = number_format($trans['amount'], 0, ',', '.');
+                $note = str_replace('"', '""', $trans['note'] ?? ''); // Escape quotes for CSV
+
+                $csvData .= sprintf(
+                    "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                    $trans['transaction_date'],
+                    $trans['type'] === 'INCOME' ? 'Thu nhập' : 'Chi tiêu',
+                    $trans['category_type'] === 'INCOME' ? 'Thu nhập' : 'Chi tiêu',
+                    $amount,
+                    $trans['category_name'],
+                    $note
+                );
+            }
+
+            // Set headers for CSV download
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename="bao-cao-thong-ke-' . date('Y-m-d') . '.csv"');
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+
+            echo "\xEF\xBB\xBF"; // UTF-8 BOM for Excel
+            echo $csvData;
+            exit;
+
+        } elseif ($format === 'json') {
+            // Get comprehensive statistics data
+            $stats = [];
+
+            // Summary stats
+            $summaryStmt = $pdo->prepare("
+                SELECT
+                    SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+                    SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense,
+                    COUNT(*) as count
+                FROM transactions
+                WHERE user_id = :user_id
+                  AND transaction_date BETWEEN :date_from AND :date_to
+            ");
+            $summaryStmt->execute([
+                ':user_id' => $userId,
+                ':date_from' => $dateFrom,
+                ':date_to' => $dateTo
+            ]);
+            $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
+
+            $stats['summary'] = [
+                'period' => $period,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'total_income' => (float) ($summary['income'] ?? 0),
+                'total_expense' => (float) ($summary['expense'] ?? 0),
+                'balance' => (float) (($summary['income'] ?? 0) - ($summary['expense'] ?? 0)),
+                'transaction_count' => (int) ($summary['count'] ?? 0)
+            ];
+
+            // Category breakdown
+            $catStmt = $pdo->prepare("
+                SELECT
+                    c.name,
+                    c.type,
+                    SUM(t.amount) as amount,
+                    COUNT(t.id) as count
+                FROM transactions t
+                INNER JOIN categories c ON t.category_id = c.id
+                WHERE t.user_id = :user_id
+                  AND t.transaction_date BETWEEN :date_from AND :date_to
+                GROUP BY c.id, c.name, c.type
+                ORDER BY SUM(t.amount) DESC
+            ");
+            $catStmt->execute([
+                ':user_id' => $userId,
+                ':date_from' => $dateFrom,
+                ':date_to' => $dateTo
+            ]);
+            $stats['categories'] = $catStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Daily breakdown
+            $dailyStmt = $pdo->prepare("
+                SELECT
+                    transaction_date,
+                    SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+                    SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+                FROM transactions
+                WHERE user_id = :user_id
+                  AND transaction_date BETWEEN :date_from AND :date_to
+                GROUP BY transaction_date
+                ORDER BY transaction_date ASC
+            ");
+            $dailyStmt->execute([
+                ':user_id' => $userId,
+                ':date_from' => $dateFrom,
+                ':date_to' => $dateTo
+            ]);
+            $stats['daily'] = $dailyStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Set headers for JSON download
+            header('Content-Type: application/json; charset=utf-8');
+            header('Content-Disposition: attachment; filename="bao-cao-thong-ke-' . date('Y-m-d') . '.json"');
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+
+            echo json_encode($stats, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            exit;
+
+        } else {
+            jsonResponse(false, 'Định dạng không được hỗ trợ');
+        }
+
+    } catch (PDOException $e) {
+        error_log("Export Statistics Error: " . $e->getMessage());
+        jsonResponse(false, 'Lỗi khi xuất báo cáo');
     }
 }
 
@@ -2340,3 +2989,4 @@ function handleGetMyTickets($pdo, $userId)
         jsonResponse(false, 'Lỗi khi tải danh sách yêu cầu');
     }
 }
+

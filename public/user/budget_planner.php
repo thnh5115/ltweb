@@ -68,8 +68,8 @@ include 'partials/navbar.php';
 </div>
 
 <!-- Add/Edit Budget Modal -->
-<div class="modal" id="budgetModal">
-    <div class="modal-content" style="max-width: 500px;">
+<div class="modal modal-small" id="budgetModal">
+    <div class="modal-content">
         <div class="modal-header">
             <h3 class="modal-title">Thêm ngân sách</h3>
             <button class="modal-close">&times;</button>

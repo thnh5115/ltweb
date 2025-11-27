@@ -104,3 +104,58 @@ ON DUPLICATE KEY UPDATE
     read_at = VALUES(read_at),
     link_url = VALUES(link_url),
     message = VALUES(message);
+
+-- System settings (default values for admin configuration)
+INSERT INTO system_settings (setting_key, setting_value, setting_type, description) VALUES
+    -- General
+    ('app_name', 'MoneyManager', 'string', 'Tên ứng dụng'),
+    ('timezone', 'Asia/Ho_Chi_Minh', 'string', 'Múi giờ mặc định'),
+    ('currency_format', 'vnd', 'string', 'Định dạng tiền tệ'),
+    ('language', 'vi', 'string', 'Ngôn ngữ mặc định'),
+    
+    -- Budget
+    ('default_budget', '10000000', 'number', 'Ngân sách mặc định cho user mới'),
+    ('warning_threshold', '80', 'number', 'Ngưỡng cảnh báo (%)'),
+    ('exceeded_threshold', '100', 'number', 'Ngưỡng vượt ngân sách (%)'),
+    ('auto_reset_budget', '1', 'boolean', 'Tự động reset ngân sách hàng tháng'),
+    
+    -- Notifications
+    ('email_budget_alert', '1', 'boolean', 'Email cảnh báo vượt ngân sách'),
+    ('email_bill_reminder', '1', 'boolean', 'Email nhắc nhở hóa đơn'),
+    ('email_goal_achieved', '1', 'boolean', 'Email thông báo đạt mục tiêu'),
+    ('email_monthly_report', '0', 'boolean', 'Email báo cáo tháng'),
+    ('bill_reminder_days', '3', 'number', 'Số ngày nhắc trước hóa đơn'),
+    
+    -- Features
+    ('feature_budget_planner', '1', 'boolean', 'Bật tính năng kế hoạch ngân sách'),
+    ('feature_recurring', '1', 'boolean', 'Bật tính năng giao dịch định kỳ'),
+    ('feature_goals', '1', 'boolean', 'Bật tính năng mục tiêu tiết kiệm'),
+    ('feature_bill_calendar', '1', 'boolean', 'Bật tính năng lịch hóa đơn'),
+    
+    -- Security
+    ('session_timeout', '60', 'number', 'Thời gian hết hạn phiên (phút)'),
+    ('min_password_length', '8', 'number', 'Độ dài mật khẩu tối thiểu'),
+    ('require_strong_password', '1', 'boolean', 'Yêu cầu mật khẩu mạnh'),
+    ('enable_2fa', '0', 'boolean', 'Bật xác thực 2 yếu tố'),
+    ('log_failed_logins', '1', 'boolean', 'Ghi log đăng nhập thất bại')
+ON DUPLICATE KEY UPDATE
+    setting_value = VALUES(setting_value),
+    description = VALUES(description);
+
+-- Support tickets (for user 2)
+INSERT INTO support_tickets (user_id, subject, category, status, is_read) VALUES
+    (2, 'Lỗi không thể thêm giao dịch', 'bug', 'open', 0),
+    (2, 'Đề xuất tính năng xuất báo cáo Excel', 'feature', 'answered', 1),
+    (2, 'Làm sao để xóa danh mục?', 'question', 'closed', 1)
+ON DUPLICATE KEY UPDATE
+    subject = VALUES(subject);
+
+-- Support messages (for tickets above)
+INSERT INTO support_messages (ticket_id, sender_id, sender_type, message) VALUES
+    (1, 2, 'user', 'Tôi không thể thêm giao dịch mới. Khi bấm nút Lưu thì không có gì xảy ra.'),
+    (2, 2, 'user', 'Tôi muốn xuất báo cáo chi tiêu ra file Excel để dễ phân tích.'),
+    (2, 1, 'admin', 'Cảm ơn bạn đã đề xuất. Chúng tôi sẽ cân nhắc thêm tính năng này trong phiên bản sau.'),
+    (3, 2, 'user', 'Tôi muốn xóa một danh mục nhưng không tìm thấy nút xóa.'),
+    (3, 1, 'admin', 'Bạn vào trang Danh mục, click vào danh mục cần xóa, sau đó chọn "Xóa" ở góc phải.')
+ON DUPLICATE KEY UPDATE
+    message = VALUES(message);

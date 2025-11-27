@@ -202,3 +202,60 @@ CREATE TABLE IF NOT EXISTS user_settings (
     
     UNIQUE KEY uk_user_settings_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Tao bang system_settings (cau hinh toan he thong - admin only)
+CREATE TABLE IF NOT EXISTS system_settings (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    setting_key VARCHAR(100) NOT NULL UNIQUE,
+    setting_value TEXT,
+    setting_type ENUM('string','number','boolean','json') DEFAULT 'string',
+    description VARCHAR(255) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_setting_key (setting_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tao bang support_tickets (yeu cau ho tro)
+CREATE TABLE IF NOT EXISTS support_tickets (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    category ENUM('bug','feature','question','other') NOT NULL DEFAULT 'question',
+    status ENUM('open','answered','closed') NOT NULL DEFAULT 'open',
+    priority ENUM('low','medium','high') DEFAULT 'medium',
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    closed_at TIMESTAMP NULL,
+    
+    CONSTRAINT fk_support_tickets_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+    
+    INDEX idx_user_status (user_id, status),
+    INDEX idx_status (status),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tao bang support_messages (tin nhan trong ticket)
+CREATE TABLE IF NOT EXISTS support_messages (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ticket_id INT UNSIGNED NOT NULL,
+    sender_id INT UNSIGNED NOT NULL,
+    sender_type ENUM('user','admin') NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_support_messages_ticket
+        FOREIGN KEY (ticket_id) REFERENCES support_tickets(id)
+        ON DELETE CASCADE,
+    
+    CONSTRAINT fk_support_messages_sender
+        FOREIGN KEY (sender_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+    
+    INDEX idx_ticket (ticket_id),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

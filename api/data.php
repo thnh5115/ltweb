@@ -194,6 +194,16 @@ elseif ($action === 'dashboard_stats') {
 
 } elseif ($action === 'chart_data') {
     handleChartData($pdo, $userId);
+}
+
+// ============================================
+// SUPPORT TICKETS (User)
+// ============================================
+elseif ($action === 'create_ticket') {
+    handleCreateTicket($pdo, $userId);
+
+} elseif ($action === 'get_my_tickets') {
+    handleGetMyTickets($pdo, $userId);
 
 } else {
     jsonResponse(false, 'Action không được hỗ trợ: ' . htmlspecialchars($action));
@@ -2229,5 +2239,104 @@ function handleChartData($pdo, $userId)
     } catch (PDOException $e) {
         error_log("Chart Data Error: " . $e->getMessage());
         jsonResponse(false, 'Lỗi khi tải dữ liệu biểu đồ');
+    }
+}
+
+// ============================================
+// SUPPORT TICKETS HANDLERS
+// ============================================
+
+function handleCreateTicket($pdo, $userId)
+{
+    try {
+        $subject = trim($_POST['subject'] ?? '');
+        $category = trim($_POST['category'] ?? 'question');
+        $message = trim($_POST['message'] ?? '');
+
+        if (empty($subject)) {
+            jsonResponse(false, 'Tiêu đề không được để trống');
+        }
+        if (empty($message)) {
+            jsonResponse(false, 'Nội dung không được để trống');
+        }
+        if (!in_array($category, ['bug', 'feature', 'question', 'other'], true)) {
+            $category = 'question';
+        }
+
+        $pdo->beginTransaction();
+        try {
+            // Insert ticket
+            $stmtTicket = $pdo->prepare("
+                INSERT INTO support_tickets (user_id, subject, category, status)
+                VALUES (:user_id, :subject, :category, 'open')
+            ");
+            $stmtTicket->execute([
+                ':user_id' => $userId,
+                ':subject' => $subject,
+                ':category' => $category
+            ]);
+
+            $ticketId = $pdo->lastInsertId();
+
+            // Insert first message
+            $stmtMessage = $pdo->prepare("
+                INSERT INTO support_messages (ticket_id, sender_id, sender_type, message)
+                VALUES (:ticket_id, :sender_id, 'user', :message)
+            ");
+            $stmtMessage->execute([
+                ':ticket_id' => $ticketId,
+                ':sender_id' => $userId,
+                ':message' => $message
+            ]);
+
+            $pdo->commit();
+            jsonResponse(true, 'Đã gửi yêu cầu hỗ trợ thành công', ['ticket_id' => $ticketId]);
+
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+    } catch (PDOException $e) {
+        error_log("Create Ticket Error: " . $e->getMessage());
+        jsonResponse(false, 'Lỗi khi tạo yêu cầu hỗ trợ');
+    }
+}
+
+function handleGetMyTickets($pdo, $userId)
+{
+    try {
+        $status = trim($_GET['status'] ?? $_POST['status'] ?? '');
+
+        $sql = "
+            SELECT 
+                t.id,
+                t.subject,
+                t.category,
+                t.status,
+                t.created_at,
+                t.updated_at
+            FROM support_tickets t
+            WHERE t.user_id = :user_id
+        ";
+
+        $params = [':user_id' => $userId];
+
+        if ($status !== '' && in_array($status, ['open', 'answered', 'closed'], true)) {
+            $sql .= " AND t.status = :status";
+            $params[':status'] = $status;
+        }
+
+        $sql .= " ORDER BY t.created_at DESC";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $tickets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        jsonResponse(true, 'Success', $tickets);
+
+    } catch (PDOException $e) {
+        error_log("Get My Tickets Error: " . $e->getMessage());
+        jsonResponse(false, 'Lỗi khi tải danh sách yêu cầu');
     }
 }

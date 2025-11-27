@@ -14,8 +14,8 @@ if ($action === 'admin_login') {
 
 // Đồng bộ session admin từ user role ADMIN
 if (!isset($_SESSION['admin_id']) && isset($_SESSION['user_id'], $_SESSION['user_role']) && $_SESSION['user_role'] === 'ADMIN') {
-    $_SESSION['admin_id']    = $_SESSION['user_id'];
-    $_SESSION['admin_name']  = $_SESSION['user_name'] ?? 'Admin';
+    $_SESSION['admin_id'] = $_SESSION['user_id'];
+    $_SESSION['admin_name'] = $_SESSION['user_name'] ?? 'Admin';
     $_SESSION['admin_email'] = $_SESSION['user_email'] ?? null;
 }
 
@@ -25,9 +25,9 @@ if (!isset($_SESSION['admin_id'])) {
 
 // --- Dashboard Summary ---
 if ($action === 'get_dashboard_summary') {
-    $totalUsers = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-    $totalCategories = (int)$pdo->query("SELECT COUNT(*) FROM categories WHERE status != 'DELETED'")->fetchColumn();
-    $totalTransactions = (int)$pdo->query("SELECT COUNT(*) FROM transactions")->fetchColumn();
+    $totalUsers = (int) $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $totalCategories = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE status != 'DELETED'")->fetchColumn();
+    $totalTransactions = (int) $pdo->query("SELECT COUNT(*) FROM transactions")->fetchColumn();
 
     $stmtExpense = $pdo->prepare("
         SELECT COALESCE(SUM(amount), 0)
@@ -37,11 +37,11 @@ if ($action === 'get_dashboard_summary') {
           AND MONTH(transaction_date) = MONTH(CURDATE())
     ");
     $stmtExpense->execute();
-    $totalExpenseThisMonth = (float)$stmtExpense->fetchColumn();
+    $totalExpenseThisMonth = (float) $stmtExpense->fetchColumn();
 
     $stmtPending = $pdo->prepare("SELECT COUNT(*) FROM bills WHERE status = 'PENDING'");
     $stmtPending->execute();
-    $pendingTransactions = (int)$stmtPending->fetchColumn();
+    $pendingTransactions = (int) $stmtPending->fetchColumn();
 
     jsonResponse(true, 'Success', [
         'total_users' => $totalUsers,
@@ -71,9 +71,9 @@ elseif ($action === 'get_dashboard_chart') {
         $values[] = 0;
     }
     foreach ($rows as $row) {
-        $idx = (int)$row['m'] - 1;
+        $idx = (int) $row['m'] - 1;
         if ($idx >= 0 && $idx < 12) {
-            $values[$idx] = (float)$row['total'];
+            $values[$idx] = (float) $row['total'];
         }
     }
 
@@ -105,11 +105,11 @@ elseif ($action === 'get_recent_transactions') {
 
     $data = array_map(function ($row) {
         return [
-            'id' => (int)$row['id'],
+            'id' => (int) $row['id'],
             'user' => $row['user_name'] ?? 'N/A',
             'type' => strtolower($row['type'] ?? ''),
             'category' => $row['category_name'] ?? '-',
-            'amount' => (float)$row['amount'],
+            'amount' => (float) $row['amount'],
             'date' => $row['transaction_date'],
             'status' => 'completed',
             'note' => $row['note'] ?? ''
@@ -134,12 +134,12 @@ elseif ($action === 'get_recent_users') {
 
 // --- Admin User Management ---
 elseif ($action === 'admin_get_users') {
-    $page  = max(1, (int)($_POST['page'] ?? $_GET['page'] ?? 1));
-    $limit = max(1, min(100, (int)($_POST['limit'] ?? $_GET['limit'] ?? 10)));
+    $page = max(1, (int) ($_POST['page'] ?? $_GET['page'] ?? 1));
+    $limit = max(1, min(100, (int) ($_POST['limit'] ?? $_GET['limit'] ?? 10)));
     $offset = ($page - 1) * $limit;
 
     $search = trim($_POST['search'] ?? $_GET['search'] ?? '');
-    $role   = trim($_POST['role'] ?? $_GET['role'] ?? '');
+    $role = trim($_POST['role'] ?? $_GET['role'] ?? '');
     $status = trim($_POST['status'] ?? $_GET['status'] ?? '');
 
     $where = [];
@@ -162,7 +162,7 @@ elseif ($action === 'admin_get_users') {
 
     $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM users u $whereSql");
     $stmtCount->execute($params);
-    $total = (int)$stmtCount->fetchColumn();
+    $total = (int) $stmtCount->fetchColumn();
 
     $sql = "
         SELECT 
@@ -196,10 +196,10 @@ elseif ($action === 'admin_get_users') {
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $summary = [
-        'total'  => $total,
-        'active' => (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status = 'ACTIVE'")->fetchColumn(),
-        'banned' => (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status = 'BANNED'")->fetchColumn(),
-        'new'    => (int)$pdo->query("SELECT COUNT(*) FROM users WHERE YEAR(created_at)=YEAR(CURDATE()) AND MONTH(created_at)=MONTH(CURDATE())")->fetchColumn(),
+        'total' => $total,
+        'active' => (int) $pdo->query("SELECT COUNT(*) FROM users WHERE status = 'ACTIVE'")->fetchColumn(),
+        'banned' => (int) $pdo->query("SELECT COUNT(*) FROM users WHERE status = 'BANNED'")->fetchColumn(),
+        'new' => (int) $pdo->query("SELECT COUNT(*) FROM users WHERE YEAR(created_at)=YEAR(CURDATE()) AND MONTH(created_at)=MONTH(CURDATE())")->fetchColumn(),
     ];
 
     jsonResponse(true, 'Success', [
@@ -211,10 +211,8 @@ elseif ($action === 'admin_get_users') {
         ],
         'summary' => $summary
     ]);
-}
-
-elseif ($action === 'admin_get_user_detail') {
-    $id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+} elseif ($action === 'admin_get_user_detail') {
+    $id = (int) ($_POST['id'] ?? $_GET['id'] ?? 0);
     if ($id <= 0) {
         jsonResponse(false, 'Thiếu id người dùng');
     }
@@ -248,10 +246,47 @@ elseif ($action === 'admin_get_user_detail') {
         jsonResponse(false, 'Không tìm thấy người dùng');
     }
     jsonResponse(true, 'Success', $user);
-}
+} elseif ($action === 'admin_create_user') {
+    $name = trim($_POST['name'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $role = 'USER'; // Default role
 
-elseif ($action === 'admin_update_user_status') {
-    $id = (int)($_POST['id'] ?? 0);
+    if ($name === '' || $email === '' || $password === '') {
+        jsonResponse(false, 'Vui lòng điền đầy đủ thông tin');
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        jsonResponse(false, 'Email không hợp lệ');
+    }
+
+    if (strlen($password) < 6) {
+        jsonResponse(false, 'Mật khẩu phải có ít nhất 6 ký tự');
+    }
+
+    // Check email exists
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+    $stmt->execute([$email]);
+    if ($stmt->fetch()) {
+        jsonResponse(false, 'Email đã tồn tại trong hệ thống');
+    }
+
+    $hash = password_hash($password, PASSWORD_DEFAULT);
+
+    $stmt = $pdo->prepare("INSERT INTO users (fullname, email, password_hash, role, status) VALUES (?, ?, ?, ?, 'ACTIVE')");
+    $stmt->execute([$name, $email, $hash, $role]);
+
+    $newId = $pdo->lastInsertId();
+
+    logActivity($pdo, $_SESSION['admin_id'], 'CREATE_USER', "Created user #$newId ($email)");
+
+    jsonResponse(true, 'Tạo người dùng thành công', [
+        'id' => $newId,
+        'email' => $email,
+        'role' => $role
+    ]);
+} elseif ($action === 'admin_update_user_status') {
+    $id = (int) ($_POST['id'] ?? 0);
     $status = strtoupper(trim($_POST['status'] ?? ''));
     if ($id <= 0 || $status === '') {
         jsonResponse(false, 'Thiếu id hoặc status');
@@ -263,11 +298,12 @@ elseif ($action === 'admin_update_user_status') {
 
     $stmt = $pdo->prepare("UPDATE users SET status = :status WHERE id = :id");
     $stmt->execute([':status' => $status, ':id' => $id]);
-    jsonResponse(true, 'Cập nhật trạng thái thành công');
-}
 
-elseif ($action === 'admin_update_user_role') {
-    $id = (int)($_POST['id'] ?? 0);
+    logActivity($pdo, $_SESSION['admin_id'], 'UPDATE_USER', "Updated user #$id status to $status");
+
+    jsonResponse(true, 'Cập nhật trạng thái thành công');
+} elseif ($action === 'admin_update_user_role') {
+    $id = (int) ($_POST['id'] ?? 0);
     $role = strtoupper(trim($_POST['role'] ?? ''));
     if ($id <= 0 || $role === '') {
         jsonResponse(false, 'Thiếu id hoặc role');
@@ -284,10 +320,10 @@ elseif ($action === 'admin_update_user_role') {
 
 // --- Categories (Admin) ---
 elseif ($action === 'admin_category_stats' || $action === 'category_stats') {
-    $total = (int)$pdo->query("SELECT COUNT(*) FROM categories WHERE status != 'DELETED'")->fetchColumn();
-    $income = (int)$pdo->query("SELECT COUNT(*) FROM categories WHERE type = 'INCOME' AND status != 'DELETED'")->fetchColumn();
-    $expense = (int)$pdo->query("SELECT COUNT(*) FROM categories WHERE type = 'EXPENSE' AND status != 'DELETED'")->fetchColumn();
-    $used = (int)$pdo->query("SELECT COUNT(DISTINCT category_id) FROM transactions")->fetchColumn();
+    $total = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE status != 'DELETED'")->fetchColumn();
+    $income = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE type = 'INCOME' AND status != 'DELETED'")->fetchColumn();
+    $expense = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE type = 'EXPENSE' AND status != 'DELETED'")->fetchColumn();
+    $used = (int) $pdo->query("SELECT COUNT(DISTINCT category_id) FROM transactions")->fetchColumn();
 
     jsonResponse(true, 'Success', [
         'total' => $total,
@@ -295,11 +331,9 @@ elseif ($action === 'admin_category_stats' || $action === 'category_stats') {
         'expense' => $expense,
         'used' => $used
     ]);
-}
-
-elseif ($action === 'admin_get_categories' || $action === 'get_categories') {
+} elseif ($action === 'admin_get_categories' || $action === 'get_categories') {
     $search = trim($_POST['search'] ?? $_GET['search'] ?? '');
-    $type   = strtoupper(trim($_POST['type'] ?? $_GET['type'] ?? ''));
+    $type = strtoupper(trim($_POST['type'] ?? $_GET['type'] ?? ''));
     $status = strtoupper(trim($_POST['status'] ?? $_GET['status'] ?? ''));
 
     $where = ["c.status != 'DELETED'"];
@@ -342,9 +376,7 @@ elseif ($action === 'admin_get_categories' || $action === 'get_categories') {
             return $row;
         }, $rows)
     ]);
-}
-
-elseif ($action === 'admin_create_category' || $action === 'add_category') {
+} elseif ($action === 'admin_create_category' || $action === 'add_category') {
     $name = trim($_POST['name'] ?? '');
     $type = strtoupper(trim($_POST['type'] ?? ''));
     $color = trim($_POST['color'] ?? '#3B6FD8');
@@ -377,11 +409,9 @@ elseif ($action === 'admin_create_category' || $action === 'add_category') {
         ':description' => $description
     ]);
 
-    jsonResponse(true, 'Thêm danh mục thành công', ['id' => (int)$pdo->lastInsertId()]);
-}
-
-elseif ($action === 'admin_update_category') {
-    $id = (int)($_POST['id'] ?? 0);
+    jsonResponse(true, 'Thêm danh mục thành công', ['id' => (int) $pdo->lastInsertId()]);
+} elseif ($action === 'admin_update_category') {
+    $id = (int) ($_POST['id'] ?? 0);
     $name = trim($_POST['name'] ?? '');
     $type = strtoupper(trim($_POST['type'] ?? ''));
     $color = trim($_POST['color'] ?? '#3B6FD8');
@@ -415,10 +445,8 @@ elseif ($action === 'admin_update_category') {
     ]);
 
     jsonResponse(true, 'Cập nhật danh mục thành công');
-}
-
-elseif ($action === 'admin_update_category_status' || $action === 'delete_category') {
-    $id = (int)($_POST['id'] ?? 0);
+} elseif ($action === 'admin_update_category_status' || $action === 'delete_category') {
+    $id = (int) ($_POST['id'] ?? 0);
     $status = strtoupper(trim($_POST['status'] ?? 'DELETED'));
     if ($id <= 0) {
         jsonResponse(false, 'Thiếu id danh mục');
@@ -434,17 +462,17 @@ elseif ($action === 'admin_update_category_status' || $action === 'delete_catego
 
 // --- Admin Transactions ---
 elseif ($action === 'admin_get_transactions') {
-    $page  = max(1, (int)($_POST['page'] ?? $_GET['page'] ?? 1));
-    $limit = max(1, min(100, (int)($_POST['limit'] ?? $_GET['limit'] ?? 20)));
+    $page = max(1, (int) ($_POST['page'] ?? $_GET['page'] ?? 1));
+    $limit = max(1, min(100, (int) ($_POST['limit'] ?? $_GET['limit'] ?? 20)));
     $offset = ($page - 1) * $limit;
 
-    $search      = trim($_POST['search'] ?? $_GET['search'] ?? '');
-    $userId      = (int)($_POST['user_id'] ?? $_GET['user_id'] ?? 0);
-    $categoryId  = (int)($_POST['category_id'] ?? $_GET['category_id'] ?? 0);
-    $type        = strtoupper(trim($_POST['type'] ?? $_GET['type'] ?? ''));
-    $status      = strtoupper(trim($_POST['status'] ?? $_GET['status'] ?? ''));
-    $dateFrom    = trim($_POST['date_from'] ?? $_GET['date_from'] ?? '');
-    $dateTo      = trim($_POST['date_to'] ?? $_GET['date_to'] ?? '');
+    $search = trim($_POST['search'] ?? $_GET['search'] ?? '');
+    $userId = (int) ($_POST['user_id'] ?? $_GET['user_id'] ?? 0);
+    $categoryId = (int) ($_POST['category_id'] ?? $_GET['category_id'] ?? 0);
+    $type = strtoupper(trim($_POST['type'] ?? $_GET['type'] ?? ''));
+    $status = strtoupper(trim($_POST['status'] ?? $_GET['status'] ?? ''));
+    $dateFrom = trim($_POST['date_from'] ?? $_GET['date_from'] ?? '');
+    $dateTo = trim($_POST['date_to'] ?? $_GET['date_to'] ?? '');
 
     $where = [];
     $params = [];
@@ -488,7 +516,7 @@ elseif ($action === 'admin_get_transactions') {
         $whereSql
     ");
     $stmtCount->execute($params);
-    $total = (int)$stmtCount->fetchColumn();
+    $total = (int) $stmtCount->fetchColumn();
 
     $sql = "
         SELECT 
@@ -532,10 +560,8 @@ elseif ($action === 'admin_get_transactions') {
             'total' => $total
         ]
     ]);
-}
-
-elseif ($action === 'admin_get_transaction_detail') {
-    $id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+} elseif ($action === 'admin_get_transaction_detail') {
+    $id = (int) ($_POST['id'] ?? $_GET['id'] ?? 0);
     if ($id <= 0) {
         jsonResponse(false, 'Thiếu id giao dịch');
     }
@@ -568,10 +594,8 @@ elseif ($action === 'admin_get_transaction_detail') {
     $txn['type'] = strtoupper($txn['type']);
     $txn['status'] = strtoupper($txn['status']);
     jsonResponse(true, 'Success', $txn);
-}
-
-elseif ($action === 'admin_update_transaction_status') {
-    $id = (int)($_POST['id'] ?? 0);
+} elseif ($action === 'admin_update_transaction_status') {
+    $id = (int) ($_POST['id'] ?? 0);
     $status = strtoupper(trim($_POST['status'] ?? ''));
     $adminNote = trim($_POST['admin_note'] ?? '');
     if ($id <= 0 || $status === '') {
@@ -597,8 +621,8 @@ elseif ($action === 'admin_update_transaction_status') {
 // --- Admin Reports / Analytics ---
 elseif ($action === 'admin_get_report_summary') {
     $dateFrom = trim($_POST['date_from'] ?? $_GET['date_from'] ?? '');
-    $dateTo   = trim($_POST['date_to'] ?? $_GET['date_to'] ?? '');
-    $userId   = (int)($_POST['user_id'] ?? $_GET['user_id'] ?? 0);
+    $dateTo = trim($_POST['date_to'] ?? $_GET['date_to'] ?? '');
+    $userId = (int) ($_POST['user_id'] ?? $_GET['user_id'] ?? 0);
 
     $where = [];
     $params = [];
@@ -625,17 +649,15 @@ elseif ($action === 'admin_get_report_summary') {
     ");
     $stmt->execute($params);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['total_income' => 0, 'total_expense' => 0];
-    $income = (float)$row['total_income'];
-    $expense = (float)$row['total_expense'];
+    $income = (float) $row['total_income'];
+    $expense = (float) $row['total_expense'];
     jsonResponse(true, 'Success', [
         'total_income' => $income,
         'total_expense' => $expense,
         'net' => $income - $expense
     ]);
-}
-
-elseif ($action === 'admin_get_report_by_month') {
-    $year = (int)($_POST['year'] ?? $_GET['year'] ?? date('Y'));
+} elseif ($action === 'admin_get_report_by_month') {
+    $year = (int) ($_POST['year'] ?? $_GET['year'] ?? date('Y'));
     $type = strtoupper(trim($_POST['type'] ?? $_GET['type'] ?? ''));
 
     $params = [':year' => $year];
@@ -662,13 +684,13 @@ elseif ($action === 'admin_get_report_by_month') {
     $incomeValues = array_fill(0, 12, 0);
     $expenseValues = array_fill(0, 12, 0);
     for ($i = 1; $i <= 12; $i++) {
-        $labels[] = str_pad((string)$i, 2, '0', STR_PAD_LEFT);
+        $labels[] = str_pad((string) $i, 2, '0', STR_PAD_LEFT);
     }
     foreach ($rows as $r) {
-        $idx = (int)$r['m'] - 1;
+        $idx = (int) $r['m'] - 1;
         if ($idx >= 0 && $idx < 12) {
-            $incomeValues[$idx] = (float)$r['income_total'];
-            $expenseValues[$idx] = (float)$r['expense_total'];
+            $incomeValues[$idx] = (float) $r['income_total'];
+            $expenseValues[$idx] = (float) $r['expense_total'];
         }
     }
 
@@ -677,12 +699,10 @@ elseif ($action === 'admin_get_report_by_month') {
         'income_values' => $incomeValues,
         'expense_values' => $expenseValues
     ]);
-}
-
-elseif ($action === 'admin_get_report_by_category') {
+} elseif ($action === 'admin_get_report_by_category') {
     $dateFrom = trim($_POST['date_from'] ?? $_GET['date_from'] ?? '');
-    $dateTo   = trim($_POST['date_to'] ?? $_GET['date_to'] ?? '');
-    $type     = strtoupper(trim($_POST['type'] ?? $_GET['type'] ?? ''));
+    $dateTo = trim($_POST['date_to'] ?? $_GET['date_to'] ?? '');
+    $type = strtoupper(trim($_POST['type'] ?? $_GET['type'] ?? ''));
 
     $where = [];
     $params = [];
@@ -717,7 +737,478 @@ elseif ($action === 'admin_get_report_by_category') {
     ]);
 }
 
+// --- System Settings ---
+elseif ($action === 'admin_get_settings') {
+    $stmt = $pdo->prepare("
+        SELECT setting_key, setting_value, setting_type
+        FROM system_settings
+        ORDER BY setting_key
+    ");
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $settings = [];
+    foreach ($rows as $row) {
+        $key = $row['setting_key'];
+        $value = $row['setting_value'];
+        $type = $row['setting_type'];
+
+        // Convert value based on type
+        if ($type === 'number') {
+            $settings[$key] = is_numeric($value) ? (strpos($value, '.') !== false ? (float) $value : (int) $value) : 0;
+        } elseif ($type === 'boolean') {
+            $settings[$key] = (int) $value;
+        } else {
+            $settings[$key] = $value;
+        }
+    }
+
+    jsonResponse(true, 'Success', $settings);
+} elseif ($action === 'admin_update_settings') {
+    $settings = $_POST['settings'] ?? [];
+
+    if (empty($settings) || !is_array($settings)) {
+        jsonResponse(false, 'Thiếu thông tin cài đặt');
+    }
+
+    // Validation rules
+    $validations = [
+        'timezone' => ['Asia/Ho_Chi_Minh', 'Asia/Bangkok', 'Asia/Singapore'],
+        'currency_format' => ['vnd', 'usd', 'eur'],
+        'language' => ['vi', 'en']
+    ];
+
+    $pdo->beginTransaction();
+    try {
+        foreach ($settings as $key => $value) {
+            // Validate specific fields
+            if (isset($validations[$key])) {
+                if (!in_array(strtolower($value), $validations[$key], true)) {
+                    throw new Exception("Giá trị {$key} không hợp lệ");
+                }
+            }
+
+            // Validate numeric ranges
+            if ($key === 'warning_threshold') {
+                $val = (int) $value;
+                if ($val < 0 || $val > 100) {
+                    throw new Exception("Ngưỡng cảnh báo phải từ 0-100");
+                }
+            }
+            if ($key === 'exceeded_threshold') {
+                $val = (int) $value;
+                if ($val < 0 || $val > 200) {
+                    throw new Exception("Ngưỡng vượt ngân sách phải từ 0-200");
+                }
+            }
+            if ($key === 'session_timeout') {
+                $val = (int) $value;
+                if ($val < 15 || $val > 1440) {
+                    throw new Exception("Thời gian phiên phải từ 15-1440 phút");
+                }
+            }
+            if ($key === 'min_password_length') {
+                $val = (int) $value;
+                if ($val < 6 || $val > 20) {
+                    throw new Exception("Độ dài mật khẩu phải từ 6-20");
+                }
+            }
+            if ($key === 'bill_reminder_days') {
+                $val = (int) $value;
+                if ($val < 1 || $val > 30) {
+                    throw new Exception("Số ngày nhắc trước phải từ 1-30");
+                }
+            }
+            if ($key === 'default_budget') {
+                $val = (float) $value;
+                if ($val < 0) {
+                    throw new Exception("Ngân sách mặc định phải >= 0");
+                }
+            }
+
+            // Update or insert setting
+            $stmt = $pdo->prepare("
+                INSERT INTO system_settings (setting_key, setting_value)
+                VALUES (:key, :value)
+                ON DUPLICATE KEY UPDATE setting_value = :value
+            ");
+            $stmt->execute([
+                ':key' => $key,
+                ':value' => $value
+            ]);
+        }
+
+        $pdo->commit();
+
+        logActivity($pdo, $_SESSION['admin_id'], 'UPDATE_SETTINGS', 'Updated system settings');
+
+        jsonResponse(true, 'Đã lưu cài đặt thành công');
+
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        jsonResponse(false, $e->getMessage());
+    }
+}
+
+// --- Support Tickets (Admin) ---
+elseif ($action === 'get_support_tickets') {
+    $page = max(1, (int) ($_GET['page'] ?? $_POST['page'] ?? 1));
+    $limit = max(1, min(100, (int) ($_GET['limit'] ?? $_POST['limit'] ?? 20)));
+    $offset = ($page - 1) * $limit;
+
+    $search = trim($_GET['search'] ?? $_POST['search'] ?? '');
+    $status = trim($_GET['status'] ?? $_POST['status'] ?? '');
+    $category = trim($_GET['category'] ?? $_POST['category'] ?? '');
+    $date = trim($_GET['date'] ?? $_POST['date'] ?? '');
+
+    $where = [];
+    $params = [];
+
+    if ($search !== '') {
+        $where[] = "(t.subject LIKE :search OR u.fullname LIKE :search OR u.email LIKE :search)";
+        $params[':search'] = '%' . $search . '%';
+    }
+    if ($status !== '' && in_array($status, ['open', 'answered', 'closed'], true)) {
+        $where[] = "t.status = :status";
+        $params[':status'] = $status;
+    }
+    if ($category !== '' && in_array($category, ['bug', 'feature', 'question', 'other'], true)) {
+        $where[] = "t.category = :category";
+        $params[':category'] = $category;
+    }
+    if ($date !== '') {
+        $where[] = "DATE(t.created_at) = :date";
+        $params[':date'] = $date;
+    }
+
+    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+    // Count total
+    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM support_tickets t INNER JOIN users u ON u.id = t.user_id $whereSql");
+    $stmtCount->execute($params);
+    $total = (int) $stmtCount->fetchColumn();
+
+    // Get tickets
+    $sql = "
+        SELECT 
+            t.id,
+            t.user_id,
+            u.fullname AS user_name,
+            u.email AS user_email,
+            t.subject,
+            t.category,
+            t.status,
+            t.priority,
+            t.is_read,
+            t.created_at
+        FROM support_tickets t
+        INNER JOIN users u ON u.id = t.user_id
+        $whereSql
+        ORDER BY t.created_at DESC
+        LIMIT :limit OFFSET :offset
+    ";
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $k => $v) {
+        $stmt->bindValue($k, $v);
+    }
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+    $tickets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Get summary
+    $summary = [
+        'total' => $total,
+        'open' => (int) $pdo->query("SELECT COUNT(*) FROM support_tickets WHERE status = 'open'")->fetchColumn(),
+        'answered' => (int) $pdo->query("SELECT COUNT(*) FROM support_tickets WHERE status = 'answered'")->fetchColumn(),
+        'closed' => (int) $pdo->query("SELECT COUNT(*) FROM support_tickets WHERE status = 'closed'")->fetchColumn()
+    ];
+
+    jsonResponse(true, 'Success', [
+        'items' => $tickets,
+        'summary' => $summary,
+        'pagination' => [
+            'page' => $page,
+            'limit' => $limit,
+            'total' => $total
+        ]
+    ]);
+} elseif ($action === 'get_ticket_detail') {
+    $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
+    if ($id <= 0) {
+        jsonResponse(false, 'Thiếu ID ticket');
+    }
+
+    // Get ticket info
+    $stmt = $pdo->prepare("
+        SELECT 
+            t.id,
+            t.user_id,
+            u.fullname AS user_name,
+            u.email AS user_email,
+            t.subject,
+            t.category,
+            t.status,
+            t.priority,
+            t.created_at,
+            t.updated_at,
+            t.closed_at
+        FROM support_tickets t
+        INNER JOIN users u ON u.id = t.user_id
+        WHERE t.id = :id
+        LIMIT 1
+    ");
+    $stmt->execute([':id' => $id]);
+    $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$ticket) {
+        jsonResponse(false, 'Không tìm thấy ticket');
+    }
+
+    // Get messages
+    $stmtMsg = $pdo->prepare("
+        SELECT 
+            m.id,
+            m.sender_id,
+            m.sender_type,
+            m.message,
+            m.created_at,
+            u.fullname AS sender_name
+        FROM support_messages m
+        INNER JOIN users u ON u.id = m.sender_id
+        WHERE m.ticket_id = :ticket_id
+        ORDER BY m.created_at ASC
+    ");
+    $stmtMsg->execute([':ticket_id' => $id]);
+    $messages = $stmtMsg->fetchAll(PDO::FETCH_ASSOC);
+
+    $ticket['messages'] = $messages;
+
+    // Mark as read
+    $pdo->prepare("UPDATE support_tickets SET is_read = 1 WHERE id = :id")->execute([':id' => $id]);
+
+    jsonResponse(true, 'Success', $ticket);
+} elseif ($action === 'reply_ticket') {
+    $ticketId = (int) ($_POST['ticket_id'] ?? 0);
+    $message = trim($_POST['message'] ?? '');
+
+    if ($ticketId <= 0) {
+        jsonResponse(false, 'Thiếu ID ticket');
+    }
+    if ($message === '') {
+        jsonResponse(false, 'Nội dung trả lời không được rỗng');
+    }
+
+    // Check ticket exists
+    $stmt = $pdo->prepare("SELECT id FROM support_tickets WHERE id = :id");
+    $stmt->execute([':id' => $ticketId]);
+    if (!$stmt->fetch()) {
+        jsonResponse(false, 'Ticket không tồn tại');
+    }
+
+    $pdo->beginTransaction();
+    try {
+        // Insert message
+        $stmtMsg = $pdo->prepare("
+            INSERT INTO support_messages (ticket_id, sender_id, sender_type, message)
+            VALUES (:ticket_id, :sender_id, 'admin', :message)
+        ");
+        $stmtMsg->execute([
+            ':ticket_id' => $ticketId,
+            ':sender_id' => $_SESSION['admin_id'],
+            ':message' => $message
+        ]);
+
+        // Update ticket status to answered
+        $stmtUpdate = $pdo->prepare("
+            UPDATE support_tickets 
+            SET status = 'answered', updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        ");
+        $stmtUpdate->execute([':id' => $ticketId]);
+
+        $pdo->commit();
+
+        logActivity($pdo, $_SESSION['admin_id'], 'REPLY_TICKET', "Replied to ticket #$ticketId");
+
+        jsonResponse(true, 'Đã gửi trả lời');
+
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        jsonResponse(false, 'Lỗi khi gửi trả lời: ' . $e->getMessage());
+    }
+} elseif ($action === 'close_ticket') {
+    $ticketId = (int) ($_POST['ticket_id'] ?? 0);
+
+    if ($ticketId <= 0) {
+        jsonResponse(false, 'Thiếu ID ticket');
+    }
+
+    // Check ticket exists
+    $stmt = $pdo->prepare("SELECT id FROM support_tickets WHERE id = :id");
+    $stmt->execute([':id' => $ticketId]);
+    if (!$stmt->fetch()) {
+        jsonResponse(false, 'Ticket không tồn tại');
+    }
+
+    // Update ticket status to closed
+    $stmtUpdate = $pdo->prepare("
+        UPDATE support_tickets 
+        SET status = 'closed', closed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = :id
+    ");
+    $stmtUpdate->execute([':id' => $ticketId]);
+
+    jsonResponse(true, 'Đã đóng ticket');
+}
+
+
+// --- System Health (Admin) ---
+elseif ($action === 'admin_get_system_health') {
+    $data = [
+        'overall_status' => 'healthy',
+        'api' => ['status' => 'ok', 'response_time' => 0],
+        'database' => ['status' => 'ok', 'connections' => 0],
+        'memory' => ['status' => 'ok', 'usage' => 0],
+        'disk' => ['status' => 'ok', 'free_gb' => 0],
+        'system_info' => [],
+        'recent_activity' => []
+    ];
+
+    // 1. Check Database & API Latency
+    $start = microtime(true);
+    try {
+        // Check connection and get thread count
+        $stmt = $pdo->query("SHOW STATUS LIKE 'Threads_connected'");
+        $threads = $stmt->fetch(PDO::FETCH_ASSOC);
+        $data['database']['connections'] = (int) $threads['Value'];
+
+        // Simple query to ensure DB is responsive
+        $pdo->query("SELECT 1");
+
+        $latency = round((microtime(true) - $start) * 1000);
+        $data['api']['response_time'] = $latency;
+
+        if ($latency > 1000) {
+            $data['api']['status'] = 'warning';
+            $data['overall_status'] = 'warning';
+        }
+    } catch (Exception $e) {
+        $data['database']['status'] = 'error';
+        $data['overall_status'] = 'error';
+        $data['recent_activity'][] = [
+            'type' => 'error',
+            'title' => 'Database Error',
+            'time' => date('H:i:s')
+        ];
+    }
+
+    // 2. Check Disk Space
+    $totalSpace = disk_total_space(__DIR__);
+    $freeSpace = disk_free_space(__DIR__);
+    $freeGb = round($freeSpace / (1024 * 1024 * 1024), 2);
+    $data['disk']['free_gb'] = $freeGb;
+
+    if ($freeGb < 1) {
+        $data['disk']['status'] = 'error';
+        $data['overall_status'] = 'error';
+        $data['recent_activity'][] = [
+            'type' => 'error',
+            'title' => 'Low Disk Space (< 1GB)',
+            'time' => date('H:i:s')
+        ];
+    } elseif ($freeGb < 5) {
+        $data['disk']['status'] = 'warning';
+        if ($data['overall_status'] !== 'error') {
+            $data['overall_status'] = 'warning';
+        }
+    }
+
+    // 3. Check Memory
+    $memoryLimit = ini_get('memory_limit');
+    if (preg_match('/^(\d+)(.)$/', $memoryLimit, $matches)) {
+        if ($matches[2] == 'M') {
+            $memoryLimitBytes = $matches[1] * 1024 * 1024;
+        } elseif ($matches[2] == 'G') {
+            $memoryLimitBytes = $matches[1] * 1024 * 1024 * 1024;
+        } else {
+            $memoryLimitBytes = $matches[1];
+        }
+    } else {
+        $memoryLimitBytes = 128 * 1024 * 1024; // Default 128M
+    }
+
+    $memoryUsage = memory_get_usage(true);
+    $memoryPercent = round(($memoryUsage / $memoryLimitBytes) * 100, 1);
+    $data['memory']['usage'] = $memoryPercent;
+
+    if ($memoryPercent > 90) {
+        $data['memory']['status'] = 'error';
+        $data['overall_status'] = 'error';
+    } elseif ($memoryPercent > 75) {
+        $data['memory']['status'] = 'warning';
+        if ($data['overall_status'] !== 'error') {
+            $data['overall_status'] = 'warning';
+        }
+    }
+
+    // 4. System Info
+    $data['system_info'] = [
+        'php_version' => phpversion(),
+        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+        'os' => PHP_OS,
+        'server_time' => date('Y-m-d H:i:s'),
+        'uptime' => 'N/A', // PHP doesn't have easy access to system uptime on Windows
+        'max_upload' => ini_get('upload_max_filesize')
+    ];
+
+    // 5. Recent Activity (Mock some success checks if no errors)
+    if (empty($data['recent_activity'])) {
+        $data['recent_activity'][] = [
+            'type' => 'success',
+            'title' => 'System Health Check Passed',
+            'time' => date('H:i:s')
+        ];
+    }
+
+    jsonResponse(true, 'Success', $data);
+}
+
+// --- Logs (Admin) ---
+elseif ($action === 'admin_get_logs') {
+    $stmt = $pdo->query("
+        SELECT l.*, u.fullname as user_name 
+        FROM activity_logs l 
+        LEFT JOIN users u ON u.id = l.user_id 
+        ORDER BY l.created_at DESC LIMIT 200
+    ");
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Format logs for frontend
+    $logs = array_map(function ($row) {
+        return [
+            'time' => $row['created_at'],
+            'user' => $row['user_name'] ?? 'Unknown',
+            'action' => $row['action'],
+            'ip' => $row['ip_address'] ?? '',
+            'note' => $row['description']
+        ];
+    }, $rows);
+
+    jsonResponse(true, 'Success', $logs);
+}
+
 // --- Fallback ---
 else {
     jsonResponse(false, 'Invalid action');
+}
+
+function logActivity($pdo, $userId, $action, $description)
+{
+    try {
+        $stmt = $pdo->prepare("INSERT INTO activity_logs (user_id, action, description) VALUES (?, ?, ?)");
+        $stmt->execute([$userId, $action, $description]);
+    } catch (Exception $e) {
+        // Silent fail for logs
+    }
 }

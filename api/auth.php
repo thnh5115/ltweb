@@ -26,14 +26,14 @@ function jsonResponse($success, $message, $data = [])
     echo json_encode([
         'success' => $success,
         'message' => $message,
-        'data'    => $data
+        'data' => $data
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 // Merge GET/POST with JSON body (JSON overrides)
-$rawBody     = file_get_contents('php://input');
-$jsonBody    = json_decode($rawBody, true);
+$rawBody = file_get_contents('php://input');
+$jsonBody = json_decode($rawBody, true);
 $requestData = array_merge(
     $_GET ?? [],
     $_POST ?? [],
@@ -59,13 +59,11 @@ switch ($action) {
         break;
 
     case 'register':
-        // TODO: Implement user registration
-        jsonResponse(false, 'Chức năng đăng ký chưa được triển khai');
+        handleRegister($pdo, $requestData);
         break;
 
     case 'forgot_password':
-        // TODO: Implement forgot password
-        jsonResponse(false, 'Chức năng quên mật khẩu chưa được triển khai');
+        handleForgotPassword($pdo, $requestData);
         break;
 
     case 'reset_password':
@@ -87,7 +85,7 @@ switch ($action) {
 function handleLogin($pdo, array $request)
 {
     // Get and normalize input
-    $email    = strtolower(trim($request['email'] ?? ''));
+    $email = strtolower(trim($request['email'] ?? ''));
     $password = (string) ($request['password'] ?? '');
 
     // Validate input
@@ -124,16 +122,16 @@ function handleLogin($pdo, array $request)
         session_regenerate_id(true);
 
         // Store user information in session
-        $_SESSION['user_id']    = $user['id'];
+        $_SESSION['user_id'] = $user['id'];
         $_SESSION['user_email'] = $user['email'];
-        $_SESSION['user_name']  = $user['fullname'];
-        $_SESSION['user_role']  = $user['role'];
+        $_SESSION['user_name'] = $user['fullname'];
+        $_SESSION['user_role'] = $user['role'];
 
         // Nếu là admin, đặt thêm session dành riêng cho admin
         if ($user['role'] === 'ADMIN') {
-            $_SESSION['admin_id']    = $user['id'];
+            $_SESSION['admin_id'] = $user['id'];
             $_SESSION['admin_email'] = $user['email'];
-            $_SESSION['admin_name']  = $user['fullname'];
+            $_SESSION['admin_name'] = $user['fullname'];
         }
 
         // Determine redirect URL based on role
@@ -153,4 +151,76 @@ function handleLogin($pdo, array $request)
         error_log("Login Error: " . $e->getMessage());
         jsonResponse(false, 'Lỗi hệ thống, vui lòng thử lại sau');
     }
+}
+
+/**
+ * Handle user registration
+ */
+function handleRegister($pdo, array $request)
+{
+    $fullname = trim($request['fullname'] ?? '');
+    $email = strtolower(trim($request['email'] ?? ''));
+    $password = $request['password'] ?? '';
+    $confirm = $request['confirm_password'] ?? '';
+
+    if ($fullname === '' || $email === '' || $password === '') {
+        jsonResponse(false, 'Vui lòng điền đầy đủ thông tin');
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        jsonResponse(false, 'Email không hợp lệ');
+    }
+
+    if (strlen($password) < 6) {
+        jsonResponse(false, 'Mật khẩu phải có ít nhất 6 ký tự');
+    }
+
+    if ($password !== $confirm) {
+        jsonResponse(false, 'Mật khẩu xác nhận không khớp');
+    }
+
+    // Check email exists
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+    $stmt->execute([$email]);
+    if ($stmt->fetch()) {
+        jsonResponse(false, 'Email đã được sử dụng');
+    }
+
+    try {
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare("INSERT INTO users (fullname, email, password_hash, role, status) VALUES (?, ?, ?, 'USER', 'ACTIVE')");
+        $stmt->execute([$fullname, $email, $hash]);
+
+        jsonResponse(true, 'Đăng ký tài khoản thành công. Vui lòng đăng nhập.');
+    } catch (PDOException $e) {
+        error_log("Register Error: " . $e->getMessage());
+        jsonResponse(false, 'Lỗi hệ thống khi đăng ký');
+    }
+}
+
+/**
+ * Handle forgot password
+ */
+function handleForgotPassword($pdo, array $request)
+{
+    $email = strtolower(trim($request['email'] ?? ''));
+
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        jsonResponse(false, 'Email không hợp lệ');
+    }
+
+    // Check if email exists
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+    $stmt->execute([$email]);
+    if (!$stmt->fetch()) {
+        // Security: Don't reveal if email exists or not, but for this demo/student project we might want to be explicit or just generic.
+        // User requested: "If not exists -> return success=false, message='Email không tồn tại...'"
+        jsonResponse(false, 'Email không tồn tại trong hệ thống');
+    }
+
+    // Mock sending email
+    // In a real app, generate token, save to DB, send email.
+    // Here we just return success as requested for "Simple Option"
+
+    jsonResponse(true, 'Một email khôi phục đã được gửi đến địa chỉ của bạn. (Demo: Vui lòng liên hệ Admin nếu không nhận được)');
 }

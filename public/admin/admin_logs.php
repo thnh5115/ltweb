@@ -54,23 +54,33 @@ include 'partials/navbar.php';
 </div>
 
 <script>
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     $(document).ready(function () {
         loadLogs();
     });
 
     function loadLogs() {
-        $.get('/api/admin_data.php?action=get_logs', function (res) {
+        $.get('/api/admin_data.php?action=admin_get_logs', function (res) {
             if (res.success) {
                 const list = $('#logs-list');
                 list.empty();
                 res.data.forEach(log => {
                     const html = `
                     <tr>
-                        <td class="text-muted text-sm">${log.time}</td>
-                        <td class="font-medium">${log.user}</td>
-                        <td><span class="badge badge-warning">${log.action}</span></td>
-                        <td class="text-sm font-mono">${log.ip}</td>
-                        <td>${log.note}</td>
+                        <td class="text-muted text-sm">${escapeHtml(log.time)}</td>
+                        <td class="font-medium">${escapeHtml(log.user)}</td>
+                        <td><span class="badge badge-warning">${escapeHtml(log.action)}</span></td>
+                        <td class="text-sm font-mono">${escapeHtml(log.ip)}</td>
+                        <td>${escapeHtml(log.note)}</td>
                     </tr>
                 `;
                     list.append(html);

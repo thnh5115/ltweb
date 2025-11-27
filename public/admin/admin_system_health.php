@@ -272,59 +272,41 @@ include 'partials/navbar.php';
         setInterval(loadSystemHealth, 30000);
     });
 
-    function refreshHealth() {
-        showToast('info', 'Đang làm mới...');
-        loadSystemHealth();
+    // Update overall status
+    const overallStatus = data.overall_status;
+    const statusIcon = $('#overallStatusIcon');
+    const statusText = $('#overallStatusText');
+
+    if (overallStatus === 'healthy') {
+        statusIcon.css('background-color', '#d1fae5');
+        statusIcon.find('i').css('color', '#10b981').removeClass('fa-exclamation-triangle fa-times-circle').addClass('fa-check-circle');
+        statusText.text('Hệ thống hoạt động bình thường');
+    } else if (overallStatus === 'warning') {
+        statusIcon.css('background-color', '#fef3c7');
+        statusIcon.find('i').css('color', '#f59e0b').removeClass('fa-check-circle fa-times-circle').addClass('fa-exclamation-triangle');
+        statusText.text('Hệ thống có cảnh báo');
+    } else {
+        statusIcon.css('background-color', '#fee2e2');
+        statusIcon.find('i').css('color', '#ef4444').removeClass('fa-check-circle fa-exclamation-triangle').addClass('fa-times-circle');
+        statusText.text('Hệ thống có lỗi');
     }
 
-    function loadSystemHealth() {
-        $.get('/api/admin_data.php?action=get_system_health', function (response) {
-            if (response.success) {
-                updateHealthStatus(response.data);
-            }
-        });
-    }
+    // Update component statuses
+    updateComponentStatus('api', data.api);
+    updateComponentStatus('db', data.database);
+    updateComponentStatus('memory', data.memory);
+    updateComponentStatus('disk', data.disk);
 
-    function updateHealthStatus(data) {
-        // Update last check time
-        const now = new Date();
-        $('#lastCheck').text(now.toLocaleTimeString('vi-VN'));
+    // Update system info
+    $('#phpVersion').text(data.system_info.php_version);
+    $('#serverSoftware').text(data.system_info.server_software);
+    $('#os').text(data.system_info.os);
+    $('#serverTime').text(data.system_info.server_time);
+    $('#uptime').text(data.system_info.uptime);
+    $('#maxUpload').text(data.system_info.max_upload);
 
-        // Update overall status
-        const overallStatus = data.overall_status;
-        const statusIcon = $('#overallStatusIcon');
-        const statusText = $('#overallStatusText');
-
-        if (overallStatus === 'healthy') {
-            statusIcon.css('background-color', '#d1fae5');
-            statusIcon.find('i').css('color', '#10b981').removeClass('fa-exclamation-triangle fa-times-circle').addClass('fa-check-circle');
-            statusText.text('Hệ thống hoạt động bình thường');
-        } else if (overallStatus === 'warning') {
-            statusIcon.css('background-color', '#fef3c7');
-            statusIcon.find('i').css('color', '#f59e0b').removeClass('fa-check-circle fa-times-circle').addClass('fa-exclamation-triangle');
-            statusText.text('Hệ thống có cảnh báo');
-        } else {
-            statusIcon.css('background-color', '#fee2e2');
-            statusIcon.find('i').css('color', '#ef4444').removeClass('fa-check-circle fa-exclamation-triangle').addClass('fa-times-circle');
-            statusText.text('Hệ thống có lỗi');
-        }
-
-        // Update component statuses
-        updateComponentStatus('api', data.api);
-        updateComponentStatus('db', data.database);
-        updateComponentStatus('memory', data.memory);
-        updateComponentStatus('disk', data.disk);
-
-        // Update system info
-        $('#phpVersion').text(data.system_info.php_version);
-        $('#serverSoftware').text(data.system_info.server_software);
-        $('#os').text(data.system_info.os);
-        $('#serverTime').text(data.system_info.server_time);
-        $('#uptime').text(data.system_info.uptime);
-        $('#maxUpload').text(data.system_info.max_upload);
-
-        // Update recent activity
-        renderRecentActivity(data.recent_activity);
+    // Update recent activity
+    renderRecentActivity(data.recent_activity);
     }
 
     function updateComponentStatus(component, data) {

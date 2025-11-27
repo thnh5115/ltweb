@@ -244,6 +244,16 @@ include 'partials/navbar.php';
 </style>
 
 <script>
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     $(document).ready(function () {
         loadTickets();
 
@@ -265,34 +275,7 @@ include 'partials/navbar.php';
                     loadTickets();
                 } else {
                     showToast('error', response.message);
-                }
-            });
-        });
-    });
-
-    function loadTickets() {
-        const filters = {
-            action: 'get_support_tickets',
-            search: $('#searchTicket').val(),
-            status: $('#filterStatus').val(),
-            category: $('#filterCategory').val(),
-            date: $('#filterDate').val()
-        };
-
-        $.get('/api/admin_data.php', filters, function (response) {
-            if (response.success) {
-                renderTickets(response.data);
-                updateSummary(response.summary);
-            }
-        });
-    }
-
-    function renderTickets(tickets) {
-        const tbody = $('#ticketsList');
-        tbody.empty();
-
-        if (tickets.length === 0) {
-            tbody.html(`
+                    tbody.html(`
             <tr>
                 <td colspan="7">
                     <div class="empty-state">
@@ -303,21 +286,21 @@ include 'partials/navbar.php';
                 </td>
             </tr>
         `);
-            return;
-        }
+                    return;
+                }
 
-        tickets.forEach(ticket => {
-            const categoryClass = `category-${ticket.category}`;
-            const statusBadge = getStatusBadge(ticket.status);
+                tickets.forEach(ticket => {
+                    const categoryClass = `category-${ticket.category}`;
+                    const statusBadge = getStatusBadge(ticket.status);
 
-            const html = `
+                    const html = `
             <tr class="ticket-row ${ticket.is_read ? '' : 'unread'}" onclick="viewTicket(${ticket.id})">
                 <td class="font-mono">#${ticket.id}</td>
                 <td>
-                    <div class="font-medium">${ticket.user_name}</div>
-                    <div class="text-sm text-muted">${ticket.user_email}</div>
+                    <div class="font-medium">${escapeHtml(ticket.user_name)}</div>
+                    <div class="text-sm text-muted">${escapeHtml(ticket.user_email)}</div>
                 </td>
-                <td class="font-medium">${ticket.subject}</td>
+                <td class="font-medium">${escapeHtml(ticket.subject)}</td>
                 <td><span class="category-badge ${categoryClass}">${getCategoryText(ticket.category)}</span></td>
                 <td class="text-sm text-muted">${ticket.created_at}</td>
                 <td>${statusBadge}</td>
@@ -328,9 +311,11 @@ include 'partials/navbar.php';
                 </td>
             </tr>
         `;
-            tbody.append(html);
+                    tbody.append(html);
+                });
+            }
         });
-    }
+    });
 
     function updateSummary(summary) {
         $('#totalTickets').text(summary.total);
@@ -378,12 +363,12 @@ include 'partials/navbar.php';
         let html = `
         <div class="mb-4">
             <div class="flex justify-between items-start mb-2">
-                <h3 class="text-xl font-bold">${ticket.subject}</h3>
+                <h3 class="text-xl font-bold">${escapeHtml(ticket.subject)}</h3>
                 ${getStatusBadge(ticket.status)}
             </div>
             <div class="flex gap-4 text-sm text-muted">
-                <span><i class="fas fa-user mr-1"></i> ${ticket.user_name}</span>
-                <span><i class="fas fa-envelope mr-1"></i> ${ticket.user_email}</span>
+                <span><i class="fas fa-user mr-1"></i> ${escapeHtml(ticket.user_name)}</span>
+                <span><i class="fas fa-envelope mr-1"></i> ${escapeHtml(ticket.user_email)}</span>
                 <span><i class="fas fa-clock mr-1"></i> ${ticket.created_at}</span>
             </div>
         </div>
@@ -398,11 +383,11 @@ include 'partials/navbar.php';
                 <div class="ticket-message-header">
                     <span class="ticket-message-author">
                         ${isAdmin ? '<i class="fas fa-user-shield mr-1"></i>' : '<i class="fas fa-user mr-1"></i>'}
-                        ${msg.sender_name}
+                        ${escapeHtml(msg.sender_name)}
                     </span>
                     <span class="ticket-message-time">${msg.created_at}</span>
                 </div>
-                <div class="ticket-message-content">${msg.message}</div>
+                <div class="ticket-message-content">${escapeHtml(msg.message)}</div>
             </div>
         `;
         });

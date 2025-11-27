@@ -9,144 +9,144 @@ include 'partials/navbar.php';
 ?>
 
 
-    
-        <!-- Page Header -->
-        <div class="flex justify-between items-center mb-8">
-            <div>
-                <h2 class="text-3xl font-bold text-gray-900 mb-2">
-                    <i class="fas fa-users mr-3 text-primary-600"></i>
-                    Quản lý người dùng
-                </h2>
-                <p class="text-muted">Quản lý tất cả người dùng trong hệ thống</p>
+
+<!-- Page Header -->
+<div class="flex justify-between items-center mb-8">
+    <div>
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            <i class="fas fa-users mr-3 text-primary-600"></i>
+            Quản lý người dùng
+        </h2>
+        <p class="text-muted">Quản lý tất cả người dùng trong hệ thống</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('addUserModal')">
+        <i class="fas fa-user-plus mr-2"></i> Thêm người dùng
+    </button>
+</div>
+
+<!-- Stats Overview -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 stagger-children">
+    <div class="admin-stat-card">
+        <div class="admin-stat-icon blue">
+            <i class="fas fa-users"></i>
+        </div>
+        <div class="admin-stat-content">
+            <span class="admin-stat-label">Tổng người dùng</span>
+            <span class="admin-stat-value" id="total-users">0</span>
+            <span class="admin-stat-change positive">
+                <i class="fas fa-arrow-up"></i> +12% tháng này
+            </span>
+        </div>
+    </div>
+
+    <div class="admin-stat-card">
+        <div class="admin-stat-icon green">
+            <i class="fas fa-user-check"></i>
+        </div>
+        <div class="admin-stat-content">
+            <span class="admin-stat-label">Hoạt động</span>
+            <span class="admin-stat-value" id="active-users">0</span>
+            <span class="admin-stat-change positive">
+                <i class="fas fa-check"></i> Online
+            </span>
+        </div>
+    </div>
+
+    <div class="admin-stat-card">
+        <div class="admin-stat-icon orange">
+            <i class="fas fa-user-clock"></i>
+        </div>
+        <div class="admin-stat-content">
+            <span class="admin-stat-label">Mới tháng này</span>
+            <span class="admin-stat-value" id="new-users">0</span>
+            <span class="admin-stat-change positive">
+                <i class="fas fa-plus"></i> Tăng trưởng
+            </span>
+        </div>
+    </div>
+
+    <div class="admin-stat-card">
+        <div class="admin-stat-icon red">
+            <i class="fas fa-user-slash"></i>
+        </div>
+        <div class="admin-stat-content">
+            <span class="admin-stat-label">Bị khóa</span>
+            <span class="admin-stat-value" id="banned-users">0</span>
+            <span class="admin-stat-change negative">
+                <i class="fas fa-ban"></i> Cảnh báo
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-6">
+    <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div class="md:col-span-2 relative">
+                <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                <input type="text" id="searchInput" class="form-control" style="padding-left: 2.75rem;"
+                    placeholder="Tìm kiếm người dùng...">
             </div>
-            <button class="btn btn-primary" onclick="openModal('addUserModal')">
-                <i class="fas fa-user-plus mr-2"></i> Thêm người dùng
+            <select id="filterStatus" class="form-control">
+                <option value="">Tất cả trạng thái</option>
+                <option value="active">Hoạt động</option>
+                <option value="banned">Bị khóa</option>
+            </select>
+            <input type="date" id="filterDate" class="form-control" placeholder="Từ ngày">
+            <button class="btn btn-primary" onclick="loadUsers()">
+                <i class="fas fa-filter mr-2"></i> Lọc
             </button>
         </div>
+    </div>
+</div>
 
-        <!-- Stats Overview -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 stagger-children">
-            <div class="admin-stat-card">
-                <div class="admin-stat-icon blue">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="admin-stat-content">
-                    <span class="admin-stat-label">Tổng người dùng</span>
-                    <span class="admin-stat-value" id="total-users">0</span>
-                    <span class="admin-stat-change positive">
-                        <i class="fas fa-arrow-up"></i> +12% tháng này
-                    </span>
-                </div>
-            </div>
+<!-- Users Table -->
+<div class="admin-card entrance-fade">
+    <div class="table-responsive">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Người dùng</th>
+                    <th>Email</th>
+                    <th>Giao dịch</th>
+                    <th>Chi tiêu</th>
+                    <th>Ngày tạo</th>
+                    <th>Trạng thái</th>
+                    <th class="text-center">Hành động</th>
+                </tr>
+            </thead>
+            <tbody id="users-list">
+                <tr>
+                    <td colspan="7">
+                        <div class="flex justify-center py-12">
+                            <div class="spinner"></div>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 
-            <div class="admin-stat-card">
-                <div class="admin-stat-icon green">
-                    <i class="fas fa-user-check"></i>
-                </div>
-                <div class="admin-stat-content">
-                    <span class="admin-stat-label">Hoạt động</span>
-                    <span class="admin-stat-value" id="active-users">0</span>
-                    <span class="admin-stat-change positive">
-                        <i class="fas fa-check"></i> Online
-                    </span>
-                </div>
-            </div>
-
-            <div class="admin-stat-card">
-                <div class="admin-stat-icon orange">
-                    <i class="fas fa-user-clock"></i>
-                </div>
-                <div class="admin-stat-content">
-                    <span class="admin-stat-label">Mới tháng này</span>
-                    <span class="admin-stat-value" id="new-users">0</span>
-                    <span class="admin-stat-change positive">
-                        <i class="fas fa-plus"></i> Tăng trưởng
-                    </span>
-                </div>
-            </div>
-
-            <div class="admin-stat-card">
-                <div class="admin-stat-icon red">
-                    <i class="fas fa-user-slash"></i>
-                </div>
-                <div class="admin-stat-content">
-                    <span class="admin-stat-label">Bị khóa</span>
-                    <span class="admin-stat-value" id="banned-users">0</span>
-                    <span class="admin-stat-change negative">
-                        <i class="fas fa-ban"></i> Cảnh báo
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Filters -->
-        <div class="card mb-6">
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div class="md:col-span-2 relative">
-                        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                        <input type="text" id="searchInput" class="form-control" style="padding-left: 2.75rem;"
-                            placeholder="Tìm kiếm người dùng...">
-                    </div>
-                    <select id="filterStatus" class="form-control">
-                        <option value="">Tất cả trạng thái</option>
-                        <option value="active">Hoạt động</option>
-                        <option value="banned">Bị khóa</option>
-                    </select>
-                    <input type="date" id="filterDate" class="form-control" placeholder="Từ ngày">
-                    <button class="btn btn-primary" onclick="loadUsers()">
-                        <i class="fas fa-filter mr-2"></i> Lọc
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Users Table -->
-        <div class="admin-card entrance-fade">
-            <div class="table-responsive">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>Người dùng</th>
-                            <th>Email</th>
-                            <th>Giao dịch</th>
-                            <th>Chi tiêu</th>
-                            <th>Ngày tạo</th>
-                            <th>Trạng thái</th>
-                            <th class="text-center">Hành động</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-list">
-                        <tr>
-                            <td colspan="7">
-                                <div class="flex justify-center py-12">
-                                    <div class="spinner"></div>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Pagination -->
-            <div class="p-6 border-t">
-                <div class="flex justify-between items-center">
-                    <span class="text-sm text-muted">Hiển thị <span id="showing-count">0</span> người dùng</span>
-                    <div class="pagination">
-                        <button class="pagination-btn" id="prevPage" disabled>
-                            <i class="fas fa-chevron-left"></i> Trước
-                        </button>
-                        <button class="pagination-btn active">1</button>
-                        <button class="pagination-btn">2</button>
-                        <button class="pagination-btn">3</button>
-                        <button class="pagination-btn" id="nextPage">
-                            Sau <i class="fas fa-chevron-right"></i>
-                        </button>
-                    </div>
-                </div>
+    <!-- Pagination -->
+    <div class="p-6 border-t">
+        <div class="flex justify-between items-center">
+            <span class="text-sm text-muted">Hiển thị <span id="showing-count">0</span> người dùng</span>
+            <div class="pagination">
+                <button class="pagination-btn" id="prevPage" disabled>
+                    <i class="fas fa-chevron-left"></i> Trước
+                </button>
+                <button class="pagination-btn active">1</button>
+                <button class="pagination-btn">2</button>
+                <button class="pagination-btn">3</button>
+                <button class="pagination-btn" id="nextPage">
+                    Sau <i class="fas fa-chevron-right"></i>
+                </button>
             </div>
         </div>
     </div>
+</div>
+</div>
 </div>
 
 <!-- User Detail Modal -->
@@ -237,6 +237,16 @@ include 'partials/navbar.php';
 </div>
 
 <script>
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     $(document).ready(function () {
         loadUsers();
 
@@ -305,12 +315,12 @@ include 'partials/navbar.php';
                                     <i class="fas fa-user"></i>
                                 </div>
                                 <div>
-                                    <p class="font-medium">${u.fullname || u.name}</p>
+                                    <p class="font-medium">${escapeHtml(u.fullname || u.name)}</p>
                                     <p class="text-xs text-muted">ID: #${u.id}</p>
                                 </div>
                             </div>
                         </td>
-                        <td class="text-muted">${u.email}</td>
+                        <td class="text-muted">${escapeHtml(u.email)}</td>
                         <td class="font-semibold">${u.transactions || 0} giao dịch</td>
                         <td class="font-mono font-bold text-danger">${formatMoney(u.expense || 0)}</td>
                         <td class="text-sm">${u.created_at}</td>
@@ -359,21 +369,6 @@ include 'partials/navbar.php';
             } else {
                 alert(res.message || 'Không lấy được thông tin người dùng');
             }
-        }).fail(function () {
-            alert('Lỗi hệ thống');
-        });
-    }
-
-    $('#addUserForm').on('submit', function (e) {
-        e.preventDefault();
-        alert('Chức năng tạo user mới chưa được hỗ trợ trong API hiện tại.');
-    });
-
-    function updateUserStatus(id, status) {
-        $.ajax({
-            url: '/api/admin_data.php',
-            method: 'POST',
-            dataType: 'json',
             data: { action: 'admin_update_user_status', id, status }
         }).done(function (res) {
             if (res.success) {

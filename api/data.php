@@ -3276,23 +3276,16 @@ function handleGetMyTickets($pdo, $userId)
 {
     try {
         $status = trim($_GET['status'] ?? $_POST['status'] ?? '');
-        $category = trim($_GET['category'] ?? $_POST['category'] ?? '');
-        $priority = trim($_GET['priority'] ?? $_POST['priority'] ?? '');
 
         $sql = "
-            SELECT
+            SELECT 
                 t.id,
                 t.subject,
                 t.category,
                 t.status,
-                t.priority,
-                t.is_read,
                 t.created_at,
-                t.updated_at,
-                m.message
+                t.updated_at
             FROM support_tickets t
-            LEFT JOIN support_messages m ON m.ticket_id = t.id
-                AND m.id = (SELECT MIN(id) FROM support_messages WHERE ticket_id = t.id AND sender_type = 'user')
             WHERE t.user_id = :user_id
         ";
 
@@ -3301,16 +3294,6 @@ function handleGetMyTickets($pdo, $userId)
         if ($status !== '' && in_array($status, ['open', 'answered', 'closed'], true)) {
             $sql .= " AND t.status = :status";
             $params[':status'] = $status;
-        }
-
-        if ($category !== '' && in_array($category, ['bug', 'feature', 'question', 'other'], true)) {
-            $sql .= " AND t.category = :category";
-            $params[':category'] = $category;
-        }
-
-        if ($priority !== '' && in_array($priority, ['low', 'medium', 'high'], true)) {
-            $sql .= " AND t.priority = :priority";
-            $params[':priority'] = $priority;
         }
 
         $sql .= " ORDER BY t.created_at DESC";

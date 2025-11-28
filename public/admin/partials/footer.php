@@ -12,6 +12,7 @@
 <div class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
 <!-- Main JS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="/assets/user/js/main.js"></script> <!-- Reuse toast/loading logic -->
 <script src="/assets/admin/js/admin.js"></script>
 </body>

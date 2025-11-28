@@ -304,7 +304,7 @@ include 'partials/navbar.php';
                             ${statusBadge}
                         </div>
                         <div class="text-sm text-muted">
-                            <i class="fas fa-users mr-1"></i> ${c.usage_count || 0} người dùng
+                            <i class="fas fa-users mr-1"></i> ${c.user_count || 0} người dùng
                         </div>
                     </div>
                 `;

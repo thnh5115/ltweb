@@ -272,41 +272,61 @@ include 'partials/navbar.php';
         setInterval(loadSystemHealth, 30000);
     });
 
-    // Update overall status
-    const overallStatus = data.overall_status;
-    const statusIcon = $('#overallStatusIcon');
-    const statusText = $('#overallStatusText');
+    function loadSystemHealth() {
+        $('#lastCheck').text(new Date().toLocaleTimeString('vi-VN'));
 
-    if (overallStatus === 'healthy') {
-        statusIcon.css('background-color', '#d1fae5');
-        statusIcon.find('i').css('color', '#10b981').removeClass('fa-exclamation-triangle fa-times-circle').addClass('fa-check-circle');
-        statusText.text('Hệ thống hoạt động bình thường');
-    } else if (overallStatus === 'warning') {
-        statusIcon.css('background-color', '#fef3c7');
-        statusIcon.find('i').css('color', '#f59e0b').removeClass('fa-check-circle fa-times-circle').addClass('fa-exclamation-triangle');
-        statusText.text('Hệ thống có cảnh báo');
-    } else {
-        statusIcon.css('background-color', '#fee2e2');
-        statusIcon.find('i').css('color', '#ef4444').removeClass('fa-check-circle fa-exclamation-triangle').addClass('fa-times-circle');
-        statusText.text('Hệ thống có lỗi');
+        $.get('/api/admin_data.php?action=admin_get_system_health', function (response) {
+            if (response.success) {
+                updateSystemHealth(response.data);
+            } else {
+                showToast('error', 'Không thể tải thông tin hệ thống: ' + (response.message || 'Lỗi không xác định'));
+            }
+        }).fail(function() {
+            showToast('error', 'Lỗi kết nối khi tải thông tin hệ thống');
+        });
     }
 
-    // Update component statuses
-    updateComponentStatus('api', data.api);
-    updateComponentStatus('db', data.database);
-    updateComponentStatus('memory', data.memory);
-    updateComponentStatus('disk', data.disk);
+    function refreshHealth() {
+        loadSystemHealth();
+        showToast('info', 'Đang làm mới thông tin hệ thống...');
+    }
 
-    // Update system info
-    $('#phpVersion').text(data.system_info.php_version);
-    $('#serverSoftware').text(data.system_info.server_software);
-    $('#os').text(data.system_info.os);
-    $('#serverTime').text(data.system_info.server_time);
-    $('#uptime').text(data.system_info.uptime);
-    $('#maxUpload').text(data.system_info.max_upload);
+    function updateSystemHealth(data) {
+        // Update overall status
+        const overallStatus = data.overall_status;
+        const statusIcon = $('#overallStatusIcon');
+        const statusText = $('#overallStatusText');
 
-    // Update recent activity
-    renderRecentActivity(data.recent_activity);
+        if (overallStatus === 'healthy') {
+            statusIcon.css('background-color', '#d1fae5');
+            statusIcon.find('i').css('color', '#10b981').removeClass('fa-exclamation-triangle fa-times-circle').addClass('fa-check-circle');
+            statusText.text('Hệ thống hoạt động bình thường');
+        } else if (overallStatus === 'warning') {
+            statusIcon.css('background-color', '#fef3c7');
+            statusIcon.find('i').css('color', '#f59e0b').removeClass('fa-check-circle fa-times-circle').addClass('fa-exclamation-triangle');
+            statusText.text('Hệ thống có cảnh báo');
+        } else {
+            statusIcon.css('background-color', '#fee2e2');
+            statusIcon.find('i').css('color', '#ef4444').removeClass('fa-check-circle fa-exclamation-triangle').addClass('fa-times-circle');
+            statusText.text('Hệ thống có lỗi');
+        }
+
+        // Update component statuses
+        updateComponentStatus('api', data.api);
+        updateComponentStatus('db', data.database);
+        updateComponentStatus('memory', data.memory);
+        updateComponentStatus('disk', data.disk);
+
+        // Update system info
+        $('#phpVersion').text(data.system_info.php_version);
+        $('#serverSoftware').text(data.system_info.server_software);
+        $('#os').text(data.system_info.os);
+        $('#serverTime').text(data.system_info.server_time);
+        $('#uptime').text(data.system_info.uptime);
+        $('#maxUpload').text(data.system_info.max_upload);
+
+        // Update recent activity
+        renderRecentActivity(data.recent_activity);
     }
 
     function updateComponentStatus(component, data) {

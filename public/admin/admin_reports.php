@@ -45,6 +45,9 @@ include 'partials/navbar.php';
                 <button class="btn btn-primary" onclick="generateReport()" style="background-color: #1e40af;">
                     <i class="fas fa-chart-bar mr-2"></i> Tạo báo cáo
                 </button>
+                <button class="btn btn-outline" onclick="loadReports()">
+                    <i class="fas fa-filter mr-2"></i> Lọc
+                </button>
                 <button class="btn btn-outline" onclick="exportCSV()">
                     <i class="fas fa-file-csv mr-2"></i> Xuất CSV
                 </button>
@@ -193,6 +196,11 @@ include 'partials/navbar.php';
 
     $(document).ready(function () {
         loadReports();
+
+        // Reload reports when report type changes
+        $('#reportType').change(function() {
+            loadReports();
+        });
     });
 
     function getFilters() {
@@ -212,7 +220,16 @@ include 'partials/navbar.php';
 
         loadSummary(filters);
         loadMonthChart(filters);
-        loadCategoryChart(filters);
+
+        // Load appropriate table based on report type
+        if (reportType === 'category_breakdown') {
+            loadCategoryChart(filters);
+        } else {
+            // For other report types, load transaction table
+            loadTransactionTable(filters);
+            // Still load category chart for visualization
+            loadCategoryChart(filters);
+        }
     }
 
     function loadSummary(filters) {
@@ -321,7 +338,11 @@ include 'partials/navbar.php';
                     }
                 });
 
-                renderCategoryTable(labels, values);
+                // Only render category table if this is a category breakdown report
+                const reportType = $('#reportType').val();
+                if (reportType === 'category_breakdown') {
+                    renderCategoryTable(labels, values);
+                }
                 $('#reportPreview').show();
             }
         }).fail(function () {
@@ -336,6 +357,64 @@ include 'partials/navbar.php';
         tbody.empty();
         labels.forEach((label, idx) => {
             tbody.append(`<tr><td>${label}</td><td>${formatMoney(values[idx] || 0)}</td></tr>`);
+        });
+    }
+
+    function loadTransactionTable(filters) {
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: Object.assign({ action: 'admin_get_transactions', limit: 50 }, filters)
+        }).done(function (res) {
+            if (res.success) {
+                renderTransactionTable(res.data.items || []);
+                $('#reportPreview').show();
+            } else {
+                showToast('error', 'Không tải được danh sách giao dịch');
+            }
+        }).fail(function () {
+            showToast('error', 'Lỗi khi tải danh sách giao dịch');
+        });
+    }
+
+    function renderTransactionTable(transactions) {
+        const thead = $('#reportTableHead');
+        const tbody = $('#reportTableBody');
+
+        // Update table header for transactions
+        thead.html(`
+            <tr>
+                <th>Ngày</th>
+                <th>Người dùng</th>
+                <th>Danh mục</th>
+                <th>Loại</th>
+                <th>Số tiền</th>
+                <th>Ghi chú</th>
+            </tr>
+        `);
+
+        tbody.empty();
+
+        if (transactions.length === 0) {
+            tbody.html('<tr><td colspan="6" class="text-center text-muted">Không có giao dịch nào</td></tr>');
+            return;
+        }
+
+        transactions.forEach(transaction => {
+            const typeClass = transaction.type === 'INCOME' ? 'text-success' : 'text-danger';
+            const typeText = transaction.type === 'INCOME' ? 'Thu nhập' : 'Chi tiêu';
+
+            tbody.append(`
+                <tr>
+                    <td>${transaction.transaction_date}</td>
+                    <td>${transaction.user_name || transaction.user_email || 'N/A'}</td>
+                    <td>${transaction.category_name || 'N/A'}</td>
+                    <td class="${typeClass}">${typeText}</td>
+                    <td class="${typeClass}">${formatMoney(transaction.amount)}</td>
+                    <td>${transaction.note || ''}</td>
+                </tr>
+            `);
         });
     }
 
@@ -378,11 +457,140 @@ include 'partials/navbar.php';
     }
 
     function exportCSV() {
-        showToast('info', 'Chức năng export CSV chưa được triển khai.');
+        const filters = getFilters();
+        const reportType = $('#reportType').val();
+
+        showToast('info', 'Đang chuẩn bị file CSV...');
+
+        // Create a form to submit POST request
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/api/admin_data.php';
+        form.style.display = 'none';
+
+        // Add form fields
+        const fields = {
+            action: 'admin_export_report',
+            format: 'csv',
+            date_from: filters.date_from || '',
+            date_to: filters.date_to || '',
+            report_type: reportType
+        };
+
+        Object.keys(fields).forEach(key => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = fields[key];
+            form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
     }
 
     function exportPDF() {
-        showToast('info', 'Chức năng export PDF chưa được triển khai.');
+        const filters = getFilters();
+        const reportType = $('#reportType').val();
+
+        showToast('info', 'Đang chuẩn bị file PDF...');
+
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'admin_export_report',
+                format: 'pdf',
+                date_from: filters.date_from || '',
+                date_to: filters.date_to || '',
+                report_type: reportType
+            }
+        }).done(function (res) {
+            if (res.success) {
+                generatePDF(res.data);
+            } else {
+                showToast('error', res.message || 'Không thể tải dữ liệu báo cáo');
+            }
+        }).fail(function (xhr, status, error) {
+            showToast('error', 'Lỗi khi tải dữ liệu báo cáo: ' + error);
+        });
+    }
+
+    function generatePDF(data) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Title
+        doc.setFontSize(20);
+        doc.text('Báo cáo Admin', 20, 30);
+
+        // Date range
+        doc.setFontSize(12);
+        const dateRange = data.summary.date_from && data.summary.date_to ?
+            `Từ ${data.summary.date_from} đến ${data.summary.date_to}` :
+            'Tất cả thời gian';
+        doc.text(`Thời gian: ${dateRange}`, 20, 45);
+
+        // Summary
+        doc.setFontSize(14);
+        doc.text('Tóm tắt:', 20, 65);
+
+        doc.setFontSize(12);
+        doc.text(`Tổng thu: ${formatMoney(data.summary.total_income)}`, 20, 80);
+        doc.text(`Tổng chi: ${formatMoney(data.summary.total_expense)}`, 20, 90);
+        doc.text(`Cân đối: ${formatMoney(data.summary.net)}`, 20, 100);
+        doc.text(`Số giao dịch: ${data.summary.total_transactions}`, 20, 110);
+
+        // Transactions table
+        if (data.transactions && data.transactions.length > 0) {
+            doc.text('Chi tiết giao dịch:', 20, 130);
+
+            let y = 145;
+            doc.setFontSize(10);
+
+            // Table header
+            doc.text('Ngày', 20, y);
+            doc.text('Loại', 60, y);
+            doc.text('Số tiền', 90, y);
+            doc.text('Danh mục', 130, y);
+            doc.text('Người dùng', 170, y);
+
+            y += 10;
+
+            // Table rows
+            data.transactions.slice(0, 20).forEach(transaction => { // Limit to 20 transactions for PDF
+                if (y > 270) { // New page if needed
+                    doc.addPage();
+                    y = 30;
+                }
+
+                doc.text(transaction.date, 20, y);
+                doc.text(transaction.type, 60, y);
+                doc.text(formatMoney(transaction.amount), 90, y);
+                doc.text(transaction.category.substring(0, 15), 130, y);
+                doc.text((transaction.user || '').substring(0, 15), 170, y);
+                y += 8;
+            });
+
+            if (data.transactions.length > 20) {
+                doc.text(`... và ${data.transactions.length - 20} giao dịch khác`, 20, y);
+            }
+        }
+
+        // Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.text(`Trang ${i}/${pageCount}`, 180, 285);
+            doc.text(`Xuất ngày: ${new Date().toLocaleDateString('vi-VN')}`, 20, 285);
+        }
+
+        // Download
+        doc.save(`bao-cao-admin-${new Date().toISOString().split('T')[0]}.pdf`);
+        showToast('success', 'File PDF đã được tải xuống!');
     }
 </script>
 

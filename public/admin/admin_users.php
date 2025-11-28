@@ -1,5 +1,6 @@
 <?php
 require_once '../../config.php';
+require_once '../../functions.php';
 require_once 'admin_functions.php';
 requireAdminLogin();
 
@@ -195,13 +196,13 @@ include 'partials/navbar.php';
             </div>
 
             <div class="space-y-2">
-                <button class="btn btn-outline w-full justify-start">
+                <button class="btn btn-outline w-full justify-start" onclick="resetPassword()">
                     <i class="fas fa-key mr-2"></i> Reset mật khẩu
                 </button>
-                <button class="btn btn-outline w-full justify-start text-warning">
+                <button id="banUnbanBtn" class="btn btn-outline w-full justify-start text-warning" onclick="toggleUserStatus()">
                     <i class="fas fa-ban mr-2"></i> Khóa tài khoản
                 </button>
-                <button class="btn btn-outline w-full justify-start text-danger">
+                <button class="btn btn-outline w-full justify-start text-danger" onclick="deleteUser()">
                     <i class="fas fa-trash mr-2"></i> Xóa người dùng
                 </button>
             </div>
@@ -302,8 +303,13 @@ include 'partials/navbar.php';
     $(document).ready(function () {
         loadUsers();
 
-        $('#searchInput, #filterStatus').on('change keyup', function () {
+        $('#searchInput, #filterStatus, #filterDate').on('change keyup', function () {
             loadUsers();
+        });
+
+        $('#addUserForm').on('submit', function (e) {
+            e.preventDefault();
+            addUser();
         });
 
         $('#broadcastForm').on('submit', function (e) {
@@ -325,6 +331,7 @@ include 'partials/navbar.php';
             action: 'admin_get_users',
             search: $('#searchInput').val(),
             status: $('#filterStatus').val(),
+            date: $('#filterDate').val(),
             page: 1,
             limit: 50
         };
@@ -417,6 +424,15 @@ include 'partials/navbar.php';
     }
 
     function openUserModal(userId) {
+        // Show loading in modal
+        $('#modal-user-id').text('...');
+        $('#modal-user-name').text('Đang tải...');
+        $('#modal-user-email').text('');
+        $('#modal-user-transactions').text('...');
+        $('#modal-user-expense').text('...');
+        $('#modal-user-created').text('...');
+        $('#userModal').data('user-id', userId).addClass('active').css('display', 'flex');
+
         $.ajax({
             url: '/api/admin_data.php',
             method: 'POST',
@@ -431,11 +447,19 @@ include 'partials/navbar.php';
                 $('#modal-user-transactions').text(user.transactions);
                 $('#modal-user-expense').text(formatMoney(user.expense));
                 $('#modal-user-created').text(user.created_at);
-                $('#userModal').addClass('active').css('display', 'flex');
+                
+                // Update ban/unban button based on status
+                const status = user.status || 'ACTIVE';
+                $('#userModal').data('user-status', status);
+                updateBanUnbanButton(status);
             } else {
+                $('#modal-user-name').text('Lỗi tải dữ liệu');
+                $('#modal-user-email').text(res.message || 'Không thể tải thông tin người dùng');
                 alert(res.message || 'Không lấy được thông tin người dùng');
             }
         }).fail(function () {
+            $('#modal-user-name').text('Lỗi hệ thống');
+            $('#modal-user-email').text('Không thể kết nối đến server');
             alert('Lỗi hệ thống');
         });
     }
@@ -455,6 +479,12 @@ include 'partials/navbar.php';
         }).done(function (res) {
             if (res.success) {
                 loadUsers();
+                // Update modal status if modal is open
+                const modalUserId = $('#userModal').data('user-id');
+                if (modalUserId == id) {
+                    $('#userModal').data('user-status', status);
+                    updateBanUnbanButton(status);
+                }
             } else {
                 alert(res.message || 'Cập nhật trạng thái thất bại');
             }
@@ -480,6 +510,38 @@ include 'partials/navbar.php';
         });
     }
 
+    function addUser() {
+        const submitBtn = $('#addUserForm button[type="submit"]');
+        submitBtn.prop('disabled', true).text('Đang tạo...');
+
+        const payload = {
+            action: 'admin_create_user',
+            name: $('#addUserForm input[name="name"]').val().trim(),
+            email: $('#addUserForm input[name="email"]').val().trim(),
+            password: $('#addUserForm input[name="password"]').val()
+        };
+
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: payload
+        }).done(function (res) {
+            if (res.success) {
+                alert('Tạo người dùng thành công!');
+                $('#addUserForm')[0].reset();
+                closeModal('addUserModal');
+                loadUsers(); // Reload list
+            } else {
+                alert(res.message || 'Không thể tạo người dùng');
+            }
+        }).fail(function () {
+            alert('Lỗi hệ thống khi tạo người dùng');
+        }).always(function () {
+            submitBtn.prop('disabled', false).text('Tạo tài khoản');
+        });
+    }
+
     function sendBroadcastNotification() {
         const submitBtn = $('#broadcastForm button[type="submit"]');
         submitBtn.prop('disabled', true).text('Đang gửi...');
@@ -501,14 +563,14 @@ include 'partials/navbar.php';
         }).done(function (res) {
             if (res.success) {
                 const count = res.data && res.data.recipients ? res.data.recipients : 0;
-                alert(`Đã gửi thông báo tới ${count} người dùng`);
+                showToast('success', `Đã gửi thông báo tới ${count} người dùng`);
                 $('#broadcastForm')[0].reset();
                 closeModal('broadcastModal');
             } else {
-                alert(res.message || 'Không thể gửi thông báo');
+                showToast('error', res.message || 'Không thể gửi thông báo');
             }
         }).fail(function () {
-            alert('Lỗi hệ thống khi gửi thông báo');
+            showToast('error', 'Lỗi hệ thống khi gửi thông báo');
         }).always(function () {
             submitBtn.prop('disabled', false).text('Gửi thông báo');
         });
@@ -520,6 +582,82 @@ include 'partials/navbar.php';
 
     function closeModal(id) {
         $('#' + id).removeClass('active').css('display', 'none');
+    }
+
+    function resetPassword() {
+        const id = $('#userModal').data('user-id');
+        if (!id) return;
+        if (!confirm('Xác nhận reset mật khẩu cho người dùng này? Mật khẩu mới sẽ được hiển thị.')) return;
+
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: { action: 'admin_reset_password', id }
+        }).done(function (res) {
+            if (res.success) {
+                alert('Mật khẩu mới: ' + (res.data.new_password || 'Không có'));
+                closeModal('userModal');
+                loadUsers();
+            } else {
+                alert(res.message || 'Reset mật khẩu thất bại');
+            }
+        }).fail(function () {
+            alert('Lỗi hệ thống');
+        });
+    }
+
+    function updateBanUnbanButton(status) {
+        const btn = $('#banUnbanBtn');
+        if (status === 'BANNED') {
+            btn.html('<i class="fas fa-unlock mr-2"></i> Mở khóa tài khoản');
+            btn.removeClass('text-warning').addClass('text-success');
+        } else {
+            btn.html('<i class="fas fa-ban mr-2"></i> Khóa tài khoản');
+            btn.removeClass('text-success').addClass('text-warning');
+        }
+    }
+
+    function toggleUserStatus() {
+        const id = $('#userModal').data('user-id');
+        const currentStatus = $('#userModal').data('user-status');
+        if (!id) return;
+        
+        const newStatus = currentStatus === 'BANNED' ? 'ACTIVE' : 'BANNED';
+        const actionText = newStatus === 'BANNED' ? 'khóa' : 'mở khóa';
+        
+        if (!confirm(`Xác nhận ${actionText} tài khoản này?`)) return;
+        
+        updateUserStatus(id, newStatus);
+    }
+
+    function banUser() {
+        const id = $('#userModal').data('user-id');
+        if (!id) return;
+        updateUserStatus(id, 'BANNED');
+    }
+
+    function deleteUser() {
+        const id = $('#userModal').data('user-id');
+        if (!id) return;
+        if (!confirm('Xác nhận xóa người dùng này? Hành động không thể hoàn tác.')) return;
+
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: { action: 'admin_delete_user', id }
+        }).done(function (res) {
+            if (res.success) {
+                alert('Xóa người dùng thành công');
+                closeModal('userModal');
+                loadUsers();
+            } else {
+                alert(res.message || 'Xóa thất bại');
+            }
+        }).fail(function () {
+            alert('Lỗi hệ thống');
+        });
     }
 </script>
 

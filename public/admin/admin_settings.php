@@ -390,24 +390,59 @@ include 'partials/navbar.php';
         $('.settings-form').submit(function (e) {
             e.preventDefault();
             const section = $(this).data('section');
-            const formData = $(this).serialize();
 
-            $.post('/api/admin_data.php', {
-                action: 'save_settings',
-                section: section,
-                data: formData
-            }, function (response) {
-                if (response.success) {
-                    showToast('success', 'Đã lưu cài đặt thành công');
+            // Collect all form data including checkboxes
+            const settings = {};
+
+            // Get all named inputs within this form
+            $(this).find('[name]').each(function() {
+                const $input = $(this);
+                const name = $input.attr('name');
+
+                if ($input.attr('type') === 'checkbox') {
+                    settings[name] = $input.is(':checked') ? 1 : 0;
                 } else {
-                    showToast('error', response.message);
+                    settings[name] = $input.val() || '';
+                }
+            });
+
+            console.log('Collected settings:', settings); // Debug log
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('action', 'admin_update_settings');
+
+            // Add settings as individual form fields
+            Object.keys(settings).forEach(key => {
+                formData.append('settings[' + key + ']', settings[key]);
+            });
+
+            $.ajax({
+                url: '/api/admin_data.php',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    console.log('API response:', response); // Debug log
+                    if (response.success) {
+                        showToast('success', 'Đã lưu cài đặt thành công');
+                        // Reload settings to update UI
+                        loadSettings();
+                    } else {
+                        showToast('error', response.message || 'Lỗi khi lưu cài đặt');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('AJAX error:', status, error); // Debug log
+                    showToast('error', 'Lỗi kết nối khi lưu cài đặt');
                 }
             });
         });
     });
 
     function loadSettings() {
-        $.get('/api/admin_data.php?action=get_settings', function (response) {
+        $.get('/api/admin_data.php?action=admin_get_settings', function (response) {
             if (response.success) {
                 // Populate form fields with saved settings
                 const settings = response.data;
@@ -419,7 +454,11 @@ include 'partials/navbar.php';
                         input.val(settings[key]);
                     }
                 });
+            } else {
+                showToast('error', 'Không thể tải cài đặt: ' + (response.message || 'Lỗi không xác định'));
             }
+        }).fail(function() {
+            showToast('error', 'Lỗi kết nối khi tải cài đặt');
         });
     }
 </script>

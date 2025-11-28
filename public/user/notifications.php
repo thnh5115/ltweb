@@ -29,6 +29,11 @@ include 'partials/navbar.php';
                     <option value="bill">Hóa đơn</option>
                     <option value="goal">Mục tiêu</option>
                     <option value="system">Hệ thống</option>
+                    <option value="info">Thông tin</option>
+                    <option value="success">Thành công</option>
+                    <option value="warning">Cảnh báo</option>
+                    <option value="error">Lỗi</option>
+                    <option value="reminder">Nhắc nhở</option>
                 </select>
                 <select class="form-control" id="filterStatus">
                     <option value="">Tất cả trạng thái</option>

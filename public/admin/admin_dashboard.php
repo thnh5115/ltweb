@@ -26,7 +26,7 @@ include 'partials/navbar.php';
                 <div class="admin-stat-content">
                     <span class="admin-stat-label">Tổng người dùng</span>
                     <span class="admin-stat-value" id="total-users">0</span>
-                    <span class="admin-stat-change positive">
+                    <span class="admin-stat-change positive" id="total-users-change">
                         <i class="fas fa-arrow-up"></i> +12% tháng này
                     </span>
                 </div>
@@ -39,7 +39,7 @@ include 'partials/navbar.php';
                 <div class="admin-stat-content">
                     <span class="admin-stat-label">Tổng giao dịch</span>
                     <span class="admin-stat-value" id="total-transactions">0</span>
-                    <span class="admin-stat-change positive">
+                    <span class="admin-stat-change positive" id="total-transactions-change">
                         <i class="fas fa-arrow-up"></i> +8% tháng này
                     </span>
                 </div>
@@ -52,7 +52,7 @@ include 'partials/navbar.php';
                 <div class="admin-stat-content">
                     <span class="admin-stat-label">Danh mục</span>
                     <span class="admin-stat-value" id="total-categories">0</span>
-                    <span class="admin-stat-change positive">
+                    <span class="admin-stat-change positive" id="total-categories-change">
                         <i class="fas fa-arrow-up"></i> +5%
                     </span>
                 </div>
@@ -65,7 +65,7 @@ include 'partials/navbar.php';
                 <div class="admin-stat-content">
                     <span class="admin-stat-label">Chi tiêu tháng này</span>
                     <span class="admin-stat-value" id="total-expense-month" style="color: var(--success);">0 đ</span>
-                    <span class="admin-stat-change positive">
+                    <span class="admin-stat-change positive" id="total-expense-month-change">
                         <i class="fas fa-arrow-up"></i> +15%
                     </span>
                 </div>
@@ -78,7 +78,7 @@ include 'partials/navbar.php';
                 <div class="admin-stat-content">
                     <span class="admin-stat-label">Giao dịch pending</span>
                     <span class="admin-stat-value" id="pending-transactions" style="color: var(--danger);">0</span>
-                    <span class="admin-stat-change negative">
+                    <span class="admin-stat-change negative" id="pending-transactions-change">
                         <i class="fas fa-arrow-down"></i> -5%
                     </span>
                 </div>
@@ -204,8 +204,28 @@ include 'partials/navbar.php';
                 $('#total-categories').text(res.data.total_categories ?? 0);
                 $('#total-expense-month').text(formatMoney(res.data.total_expense_this_month ?? 0));
                 $('#pending-transactions').text(res.data.pending_transactions ?? 0);
+
+                // Update percentage changes
+                updatePercentageChange('total-users-change', res.data.users_change_percent);
+                updatePercentageChange('total-transactions-change', res.data.transactions_change_percent);
+                updatePercentageChange('total-categories-change', res.data.categories_change_percent);
+                updatePercentageChange('total-expense-month-change', res.data.expense_change_percent);
+                updatePercentageChange('pending-transactions-change', res.data.pending_change_percent);
             }
         });
+    }
+
+    function updatePercentageChange(elementId, percent) {
+        const element = $('#' + elementId);
+        if (percent !== undefined) {
+            const isPositive = percent >= 0;
+            const sign = isPositive ? '+' : '';
+            const icon = isPositive ? 'fa-arrow-up' : 'fa-arrow-down';
+            const className = isPositive ? 'positive' : 'negative';
+
+            element.removeClass('positive negative').addClass(className);
+            element.html(`<i class="fas ${icon}"></i> ${sign}${Math.abs(percent)}% tháng này`);
+        }
     }
 
     function loadCharts() {

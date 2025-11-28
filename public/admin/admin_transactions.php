@@ -28,6 +28,8 @@ include 'partials/navbar.php';
             </select>
             <input type="date" id="dateFrom" class="form-control" placeholder="Từ ngày">
             <input type="date" id="dateTo" class="form-control" placeholder="Đến ngày">
+            <button type="button" id="filterBtn" class="btn btn-primary">Lọc</button>
+            <button type="button" id="clearFilterBtn" class="btn btn-outline">Xóa bộ lọc</button>
         </div>
     </div>
 
@@ -41,7 +43,7 @@ include 'partials/navbar.php';
                         <th>Loại</th>
                         <th>Danh mục</th>
                         <th>Số tiền</th>
-                        <th>Ngày</th>
+                        <th>Ngày tạo</th>
                         <th>Trạng thái</th>
                         <th>Hành động</th>
                     </tr>
@@ -65,19 +67,55 @@ include 'partials/navbar.php';
 <script>
     $(document).ready(function () {
         loadTransactions();
-        $('#searchInput, #typeFilter, #statusFilter, #dateFrom, #dateTo').on('change keyup', function () {
+        $('#searchInput').on('keyup', function () {
+            loadTransactions();
+        });
+        $('#typeFilter, #statusFilter').on('change', function () {
+            loadTransactions();
+        });
+        $('#filterBtn').on('click', function () {
+            loadTransactions();
+        });
+        $('#clearFilterBtn').on('click', function () {
+            $('#searchInput').val('');
+            $('#typeFilter').val('');
+            $('#statusFilter').val('');
+            $('#dateFrom').val('');
+            $('#dateTo').val('');
             loadTransactions();
         });
     });
 
     function loadTransactions(page = 1) {
+        let dateFrom = $('#dateFrom').val().trim();
+        let dateTo = $('#dateTo').val().trim();
+
+        // Validate date format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (dateFrom && !dateRegex.test(dateFrom)) {
+            alert('Định dạng ngày "Từ ngày" không hợp lệ. Vui lòng nhập theo format YYYY-MM-DD');
+            return;
+        }
+        if (dateTo && !dateRegex.test(dateTo)) {
+            alert('Định dạng ngày "Đến ngày" không hợp lệ. Vui lòng nhập theo format YYYY-MM-DD');
+            return;
+        }
+
+        // Validate date range
+        if (dateFrom && dateTo && new Date(dateFrom) > new Date(dateTo)) {
+            // Swap dates
+            [dateFrom, dateTo] = [dateTo, dateFrom];
+            $('#dateFrom').val(dateFrom);
+            $('#dateTo').val(dateTo);
+        }
+
         const params = {
             action: 'admin_get_transactions',
             search: $('#searchInput').val(),
             type: $('#typeFilter').val(),
             status: $('#statusFilter').val(),
-            date_from: $('#dateFrom').val(),
-            date_to: $('#dateTo').val(),
+            date_from: dateFrom,
+            date_to: dateTo,
             page: page,
             limit: 50
         };
@@ -120,7 +158,7 @@ include 'partials/navbar.php';
                         <td>${t.type === 'INCOME' ? 'Thu' : 'Chi'}</td>
                         <td>${t.category_name || '-'}</td>
                         <td class="${amountClass} font-bold">${sign}${formatMoney(t.amount || 0)}</td>
-                        <td>${t.transaction_date || t.created_at || ''}</td>
+                        <td>${t.created_at ? new Date(t.created_at).toLocaleDateString('vi-VN') : ''}</td>
                         <td>${statusBadge}</td>
                         <td>
                             <button class="text-warning ml-2" title="Gắn cờ" onclick="updateTxnStatus(${t.id}, 'FLAGGED')"><i class="fas fa-flag"></i></button>

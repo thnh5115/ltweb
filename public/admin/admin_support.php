@@ -257,7 +257,11 @@ include 'partials/navbar.php';
     $(document).ready(function () {
         loadTickets();
 
-        $('#applyFilters, #filterStatus, #filterCategory').on('change', function () {
+        $('#applyFilters').on('click', function () {
+            loadTickets();
+        });
+
+        $('#filterStatus, #filterCategory, #filterDate').on('change', function () {
             loadTickets();
         });
 
@@ -275,47 +279,86 @@ include 'partials/navbar.php';
                     loadTickets();
                 } else {
                     showToast('error', response.message);
-                    tbody.html(`
-            <tr>
-                <td colspan="7">
-                    <div class="empty-state">
-                        <i class="fas fa-inbox"></i>
-                        <p class="text-lg font-medium mb-2">Không có ticket</p>
-                        <p class="text-sm">Chưa có yêu cầu hỗ trợ nào</p>
-                    </div>
-                </td>
-            </tr>
-        `);
-                    return;
                 }
-
-                tickets.forEach(ticket => {
-                    const categoryClass = `category-${ticket.category}`;
-                    const statusBadge = getStatusBadge(ticket.status);
-
-                    const html = `
-            <tr class="ticket-row ${ticket.is_read ? '' : 'unread'}" onclick="viewTicket(${ticket.id})">
-                <td class="font-mono">#${ticket.id}</td>
-                <td>
-                    <div class="font-medium">${escapeHtml(ticket.user_name)}</div>
-                    <div class="text-sm text-muted">${escapeHtml(ticket.user_email)}</div>
-                </td>
-                <td class="font-medium">${escapeHtml(ticket.subject)}</td>
-                <td><span class="category-badge ${categoryClass}">${getCategoryText(ticket.category)}</span></td>
-                <td class="text-sm text-muted">${ticket.created_at}</td>
-                <td>${statusBadge}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); viewTicket(${ticket.id})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                </td>
-            </tr>
-        `;
-                    tbody.append(html);
-                });
-            }
+            });
         });
     });
+
+    function loadTickets() {
+        const tbody = $('#ticketsList');
+        tbody.html('<tr><td colspan="6" class="text-center p-8"><div class="spinner"></div><p>Đang tải...</p></td></tr>');
+
+        const search = $('#searchTicket').val();
+        const status = $('#filterStatus').val();
+        const category = $('#filterCategory').val();
+        const date = $('#filterDate').val();
+
+        const params = {
+            action: 'get_support_tickets',
+            search: search,
+            status: status,
+            category: category,
+            date: date
+        };
+
+        $.get('/api/admin_data.php', params, function (response) {
+            if (response.success) {
+                updateSummary(response.data.summary);
+                renderTickets(response.data.items);
+            } else {
+                tbody.html('<tr><td colspan="6" class="text-center p-8 text-danger">Không thể tải danh sách ticket</td></tr>');
+                showToast('error', 'Không thể tải danh sách ticket');
+            }
+        }).fail(function(xhr, status, error) {
+            tbody.html('<tr><td colspan="6" class="text-center p-8 text-danger">Lỗi kết nối khi tải danh sách ticket</td></tr>');
+            showToast('error', 'Lỗi kết nối khi tải danh sách ticket');
+        });
+    }
+
+    function renderTickets(tickets) {
+        const tbody = $('#ticketsList');
+        tbody.empty();
+
+        if (tickets.length === 0) {
+            tbody.html(`
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <p class="text-lg font-medium mb-2">Không có ticket</p>
+                            <p class="text-sm">Chưa có yêu cầu hỗ trợ nào</p>
+                        </div>
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        tickets.forEach(ticket => {
+            const categoryClass = `category-${ticket.category}`;
+            const statusBadge = getStatusBadge(ticket.status);
+
+            const html = `
+                <tr class="ticket-row ${ticket.is_read ? '' : 'unread'}" onclick="viewTicket(${ticket.id})">
+                    <td class="font-mono">#${ticket.id}</td>
+                    <td>
+                        <div class="font-medium">${escapeHtml(ticket.user_name || 'Người dùng đã xóa')}</div>
+                        <div class="text-sm text-muted">${escapeHtml(ticket.user_email || 'N/A')}</div>
+                    </td>
+                    <td class="font-medium">${escapeHtml(ticket.subject)}</td>
+                    <td><span class="category-badge ${categoryClass}">${getCategoryText(ticket.category)}</span></td>
+                    <td class="text-sm text-muted">${ticket.created_at}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); viewTicket(${ticket.id})">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+            tbody.append(html);
+        });
+    }
 
     function updateSummary(summary) {
         $('#totalTickets').text(summary.total);

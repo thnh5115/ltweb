@@ -33,11 +33,32 @@ function ensurePermission(array $allowedRoles, $currentRole)
 }
 
 // --- Dashboard Summary ---
+// --- Dashboard Summary with Date Filtering ---
 if ($action === 'get_dashboard_summary') {
-    ensurePermission(['SUPER_ADMIN','ADMIN','STAFF'], $currentAdminRole);
-    $totalUsers = (int) $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    ensurePermission(['ADMIN'], $currentAdminRole);
+
+    $dateFrom = trim($_POST['date_from'] ?? '');
+    $dateTo = trim($_POST['date_to'] ?? '');
+
+    $where = [];
+    $params = [];
+    if ($dateFrom !== '') {
+        $where[] = "transaction_date >= :date_from";
+        $params[':date_from'] = $dateFrom;
+    }
+    if ($dateTo !== '') {
+        $where[] = "transaction_date <= :date_to";
+        $params[':date_to'] = $dateTo;
+    }
+    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+    $stmtUsers = $pdo->prepare("SELECT COUNT(DISTINCT user_id) FROM transactions $whereSql");
+    $stmtUsers->execute($params);
+    $totalUsers = (int) $stmtUsers->fetchColumn();
     $totalCategories = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE status != 'DELETED'")->fetchColumn();
-    $totalTransactions = (int) $pdo->query("SELECT COUNT(*) FROM transactions")->fetchColumn();
+    $stmtTxn = $pdo->prepare("SELECT COUNT(*) FROM transactions $whereSql");
+    $stmtTxn->execute($params);
+    $totalTransactions = (int) $stmtTxn->fetchColumn();
 
     $stmtExpense = $pdo->prepare("
         SELECT COALESCE(SUM(amount), 0)
@@ -53,18 +74,109 @@ if ($action === 'get_dashboard_summary') {
     $stmtPending->execute();
     $pendingTransactions = (int) $stmtPending->fetchColumn();
 
+    // Calculate previous month pending transactions
+    $stmtPendingPrev = $pdo->prepare("
+        SELECT COUNT(*) FROM bills
+        WHERE status = 'PENDING'
+          AND YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+          AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    ");
+    $stmtPendingPrev->execute();
+    $pendingPrevMonth = (int) $stmtPendingPrev->fetchColumn();
+
+    // Calculate previous month values for percentage changes
+    $stmtUsersPrev = $pdo->prepare("
+        SELECT COUNT(*) FROM users
+        WHERE YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+        AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    ");
+    $stmtUsersPrev->execute();
+    $usersPrevMonth = (int) $stmtUsersPrev->fetchColumn();
+
+    $stmtTxnPrev = $pdo->prepare("
+        SELECT COUNT(*) FROM transactions
+        WHERE YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+        AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    ");
+    $stmtTxnPrev->execute();
+
+    $stmtExpense = $pdo->prepare("
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE type = 'EXPENSE'
+          AND YEAR(transaction_date) = YEAR(CURDATE())
+          AND MONTH(transaction_date) = MONTH(CURDATE())
+    ");
+    $stmtExpense->execute();
+    $totalExpenseThisMonth = (float) $stmtExpense->fetchColumn();
+
+    $stmtPending = $pdo->prepare("SELECT COUNT(*) FROM bills WHERE status = 'PENDING'");
+    $stmtPending->execute();
+    $pendingTransactions = (int) $stmtPending->fetchColumn();
+
+    // Calculate previous month pending transactions
+    $stmtPendingPrev = $pdo->prepare("
+        SELECT COUNT(*) FROM bills
+        WHERE status = 'PENDING'
+          AND YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+          AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    ");
+    $stmtPendingPrev->execute();
+    $pendingPrevMonth = (int) $stmtPendingPrev->fetchColumn();
+
+    // Calculate previous month values for percentage changes
+    $stmtUsersPrev = $pdo->prepare("
+        SELECT COUNT(*) FROM users
+        WHERE YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+        AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    ");
+    $stmtUsersPrev->execute();
+    $usersPrevMonth = (int) $stmtUsersPrev->fetchColumn();
+
+    $stmtTxnPrev = $pdo->prepare("
+        SELECT COUNT(*) FROM transactions
+        WHERE YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+        AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    ");
+    $stmtTxnPrev->execute();
+    $txnPrevMonth = (int) $stmtTxnPrev->fetchColumn();
+
+    $stmtExpensePrev = $pdo->prepare("
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE type = 'EXPENSE'
+          AND YEAR(transaction_date) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+          AND MONTH(transaction_date) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    ");
+    $stmtExpensePrev->execute();
+    $expensePrevMonth = (float) $stmtExpensePrev->fetchColumn();
+
+    // Calculate percentages
+    $usersChange = $usersPrevMonth > 0 ? (($totalUsers - $usersPrevMonth) / $usersPrevMonth) * 100 : 0;
+    $txnChange = $txnPrevMonth > 0 ? (($totalTransactions - $txnPrevMonth) / $txnPrevMonth) * 100 : 0;
+    $expenseChange = $expensePrevMonth > 0 ? (($totalExpenseThisMonth - $expensePrevMonth) / $expensePrevMonth) * 100 : 0;
+    $pendingChange = $pendingPrevMonth > 0 ? (($pendingTransactions - $pendingPrevMonth) / $pendingPrevMonth) * 100 : 0;
+
+    // For categories, we don't have monthly creation data, so use a simple calculation or set to 0
+    $categoriesChange = 0; // Could be enhanced later if needed
+
     jsonResponse(true, 'Success', [
         'total_users' => $totalUsers,
         'total_categories' => $totalCategories,
         'total_transactions' => $totalTransactions,
         'total_expense_this_month' => $totalExpenseThisMonth,
-        'pending_transactions' => $pendingTransactions
+        'pending_transactions' => $pendingTransactions,
+        'users_change_percent' => round($usersChange, 1),
+        'transactions_change_percent' => round($txnChange, 1),
+        'categories_change_percent' => round($categoriesChange, 1),
+        'expense_change_percent' => round($expenseChange, 1),
+        'pending_change_percent' => round($pendingChange, 1)
     ]);
 }
 
 // --- Dashboard Chart (monthly expense current year) ---
 elseif ($action === 'get_dashboard_chart') {
-    ensurePermission(['SUPER_ADMIN','ADMIN','STAFF'], $currentAdminRole);
+    ensurePermission(['ADMIN'], $currentAdminRole);
     $stmt = $pdo->prepare("
         SELECT MONTH(transaction_date) AS m, COALESCE(SUM(amount),0) AS total
         FROM transactions
@@ -96,7 +208,7 @@ elseif ($action === 'get_dashboard_chart') {
 
 // --- Recent Transactions ---
 elseif ($action === 'get_recent_transactions') {
-    ensurePermission(['SUPER_ADMIN','ADMIN','STAFF'], $currentAdminRole);
+    ensurePermission(['ADMIN'], $currentAdminRole);
     $stmt = $pdo->prepare("
         SELECT 
             t.id,
@@ -132,8 +244,37 @@ elseif ($action === 'get_recent_transactions') {
 }
 
 // --- Recent Users ---
+elseif ($action === 'get_recent_users') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
+    $stmt = $pdo->prepare("
+        SELECT 
+            id,
+            fullname,
+            email,
+            created_at
+        FROM users
+        WHERE status != 'DELETED'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 10
+    ");
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $data = array_map(function ($row) {
+        return [
+            'id' => (int) $row['id'],
+            'name' => $row['fullname'] ?? 'N/A',
+            'email' => $row['email'] ?? '',
+            'created_at' => date('d/m/Y H:i', strtotime($row['created_at']))
+        ];
+    }, $rows);
+
+    jsonResponse(true, 'Success', $data);
+}
+
+// --- Admin Logs ---
 elseif ($action === 'admin_get_logs') {
-    ensurePermission(['SUPER_ADMIN','ADMIN'], $currentAdminRole);
+    ensurePermission(['ADMIN'], $currentAdminRole);
 
     $page = max(1, (int) ($_GET['page'] ?? $_POST['page'] ?? 1));
     $limit = max(1, min(100, (int) ($_GET['limit'] ?? $_POST['limit'] ?? 20)));
@@ -213,11 +354,74 @@ elseif ($action === 'admin_get_logs') {
     ]);
 }
 
-// --- Fallback ---
-else {
-    jsonResponse(false, 'Invalid action');
+// --- Admin Get User Detail ---
+elseif ($action === 'admin_get_user_detail') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
+    $id = (int) ($_POST['id'] ?? $_GET['id'] ?? 0);
+    if ($id <= 0) {
+        jsonResponse(false, 'Thiếu id người dùng');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT 
+            u.id,
+            u.fullname,
+            u.email,
+            u.role,
+            u.status,
+            u.phone,
+            u.avatar_url,
+            u.created_at,
+            COALESCE(tx.transactions_count, 0) AS transactions,
+            COALESCE(tx.total_expense, 0) AS expense
+        FROM users u
+        LEFT JOIN (
+            SELECT user_id,
+                   COUNT(*) AS transactions_count,
+                   SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) AS total_expense
+            FROM transactions
+            GROUP BY user_id
+        ) tx ON tx.user_id = u.id
+        WHERE u.id = :id
+        LIMIT 1
+    ");
+    $stmt->execute([':id' => $id]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user) {
+        jsonResponse(false, 'Không tìm thấy người dùng');
+    }
+    jsonResponse(true, 'Success', $user);
 }
+
+// --- Admin Get Users List ---
+elseif ($action === 'admin_get_users') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
+
+    $page = max(1, (int) ($_GET['page'] ?? $_POST['page'] ?? 1));
+    $limit = max(1, min(100, (int) ($_GET['limit'] ?? $_POST['limit'] ?? 50)));
+    $offset = ($page - 1) * $limit;
+
+    $search = trim($_GET['search'] ?? $_POST['search'] ?? '');
+    $status = trim($_GET['status'] ?? $_POST['status'] ?? '');
+    $dateFilter = trim($_GET['date'] ?? $_POST['date'] ?? '');
+
+    $where = [];
+    $params = [];
+
+    if ($search !== '') {
+        $where[] = "(LOWER(u.fullname) LIKE :search OR LOWER(u.email) LIKE :search)";
+        $params[':search'] = '%' . strtolower($search) . '%';
+    }
+
+    if ($status !== '') {
+        $where[] = 'u.status = :status';
         $params[':status'] = strtoupper($status);
+    }
+
+    if ($dateFilter !== '') {
+        // Filter by created_at date (YYYY-MM-DD)
+        $where[] = 'DATE(u.created_at) = :date_filter';
+        $params[':date_filter'] = $dateFilter;
     }
 
     $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
@@ -273,44 +477,11 @@ else {
         ],
         'summary' => $summary
     ]);
-} elseif ($action === 'admin_get_user_detail') {
-    ensurePermission(['SUPER_ADMIN','ADMIN'], $currentAdminRole);
-    $id = (int) ($_POST['id'] ?? $_GET['id'] ?? 0);
-    if ($id <= 0) {
-        jsonResponse(false, 'Thiếu id người dùng');
-    }
+}
 
-    $stmt = $pdo->prepare("
-        SELECT 
-            u.id,
-            u.fullname,
-            u.email,
-            u.role,
-            u.status,
-            u.phone,
-            u.avatar_url,
-            u.created_at,
-            COALESCE(tx.transactions_count, 0) AS transactions,
-            COALESCE(tx.total_expense, 0) AS expense
-        FROM users u
-        LEFT JOIN (
-            SELECT user_id,
-                   COUNT(*) AS transactions_count,
-                   SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) AS total_expense
-            FROM transactions
-            GROUP BY user_id
-        ) tx ON tx.user_id = u.id
-        WHERE u.id = :id
-        LIMIT 1
-    ");
-    $stmt->execute([':id' => $id]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$user) {
-        jsonResponse(false, 'Không tìm thấy người dùng');
-    }
-    jsonResponse(true, 'Success', $user);
-} elseif ($action === 'admin_create_user') {
-    ensurePermission(['SUPER_ADMIN'], $currentAdminRole);
+// --- Admin Create User ---
+elseif ($action === 'admin_create_user') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -349,8 +520,11 @@ else {
         'email' => $email,
         'role' => $role
     ]);
-} elseif ($action === 'admin_update_user_status') {
-    ensurePermission(['SUPER_ADMIN','ADMIN'], $currentAdminRole);
+}
+
+// --- Admin Update User Status ---
+elseif ($action === 'admin_update_user_status') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
     $id = (int) ($_POST['id'] ?? 0);
     $status = strtoupper(trim($_POST['status'] ?? ''));
     if ($id <= 0 || $status === '') {
@@ -367,14 +541,17 @@ else {
     logAdminAction($pdo, $_SESSION['admin_id'], 'UPDATE_USER_STATUS', "Đổi trạng thái người dùng #$id sang $status", 'user', $id, ['status' => $status]);
 
     jsonResponse(true, 'Cập nhật trạng thái thành công');
-} elseif ($action === 'admin_update_user_role') {
-    ensurePermission(['SUPER_ADMIN'], $currentAdminRole);
+}
+
+// --- Admin Update User Role ---
+elseif ($action === 'admin_update_user_role') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
     $id = (int) ($_POST['id'] ?? 0);
     $role = strtoupper(trim($_POST['role'] ?? ''));
     if ($id <= 0 || $role === '') {
         jsonResponse(false, 'Thiếu id hoặc role');
     }
-    $allowed = ['SUPER_ADMIN','ADMIN','STAFF','USER'];
+    $allowed = ['ADMIN','USER'];
     if (!in_array($role, $allowed, true)) {
         jsonResponse(false, 'Role không hợp lệ');
     }
@@ -383,8 +560,51 @@ else {
     $stmt->execute([':role' => $role, ':id' => $id]);
     logAdminAction($pdo, $_SESSION['admin_id'], 'UPDATE_USER_ROLE', "Đổi quyền user #$id sang $role", 'user', $id, ['role' => $role]);
     jsonResponse(true, 'Cập nhật quyền thành công');
-} elseif ($action === 'admin_send_notification') {
-    ensurePermission(['SUPER_ADMIN','ADMIN'], $currentAdminRole);
+}
+
+// --- Admin Reset Password ---
+elseif ($action === 'admin_reset_password') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
+    $id = (int) ($_POST['id'] ?? 0);
+    if ($id <= 0) {
+        jsonResponse(false, 'Thiếu id người dùng');
+    }
+
+    // Generate new password (8 characters)
+    $newPassword = bin2hex(random_bytes(4));
+    $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+
+    $stmt = $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+    $stmt->execute([$hash, $id]);
+
+    logAdminAction($pdo, $_SESSION['admin_id'], 'RESET_PASSWORD', "Reset mật khẩu user #$id", 'user', $id);
+
+    jsonResponse(true, 'Reset mật khẩu thành công', ['new_password' => $newPassword]);
+}
+
+// --- Admin Delete User ---
+elseif ($action === 'admin_delete_user') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
+    $id = (int) ($_POST['id'] ?? 0);
+    if ($id <= 0) {
+        jsonResponse(false, 'Thiếu id người dùng');
+    }
+
+    if ($id == $_SESSION['admin_id']) {
+        jsonResponse(false, 'Không thể xóa tài khoản của chính mình');
+    }
+
+    $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
+    $stmt->execute([$id]);
+
+    logAdminAction($pdo, $_SESSION['admin_id'], 'DELETE_USER', "Xóa user #$id", 'user', $id);
+
+    jsonResponse(true, 'Xóa người dùng thành công');
+}
+
+// --- Admin Send Notification ---
+elseif ($action === 'admin_send_notification') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
 
     $title = trim($_POST['title'] ?? '');
     $message = trim($_POST['message'] ?? '');
@@ -478,10 +698,10 @@ else {
 
 // --- Categories (Admin) ---
 elseif ($action === 'admin_category_stats' || $action === 'category_stats') {
-    $total = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE status != 'DELETED'")->fetchColumn();
-    $income = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE type = 'INCOME' AND status != 'DELETED'")->fetchColumn();
-    $expense = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE type = 'EXPENSE' AND status != 'DELETED'")->fetchColumn();
-    $used = (int) $pdo->query("SELECT COUNT(DISTINCT category_id) FROM transactions")->fetchColumn();
+    $total = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE status != 'DELETED' AND user_id IS NULL")->fetchColumn();
+    $income = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE type = 'INCOME' AND status != 'DELETED' AND user_id IS NULL")->fetchColumn();
+    $expense = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE type = 'EXPENSE' AND status != 'DELETED' AND user_id IS NULL")->fetchColumn();
+    $used = (int) $pdo->query("SELECT COUNT(DISTINCT c.id) FROM categories c JOIN transactions t ON c.id = t.category_id WHERE c.user_id IS NULL")->fetchColumn();
 
     jsonResponse(true, 'Success', [
         'total' => $total,
@@ -512,19 +732,21 @@ elseif ($action === 'admin_category_stats' || $action === 'category_stats') {
 
     $sql = "
         SELECT 
-            c.id, c.name, c.type, c.status, c.color, c.icon, c.description, c.created_at,
-            COALESCE(tx.usage_count, 0) AS usage_count
+            c.name, c.type, c.status, c.color, c.icon, c.description, c.created_at,
+            COUNT(DISTINCT tx.user_id) AS user_count,
+            COALESCE(SUM(tx.transaction_count), 0) AS total_transactions
         FROM categories c
         LEFT JOIN (
-            SELECT category_id, COUNT(*) AS usage_count
+            SELECT category_id, user_id, COUNT(*) AS transaction_count
             FROM transactions
-            GROUP BY category_id
+            GROUP BY category_id, user_id
         ) tx ON tx.category_id = c.id
-        $whereSql
-        ORDER BY c.created_at DESC, c.id DESC
+        WHERE c.status != 'DELETED' AND c.user_id IS NULL
+        GROUP BY c.name, c.type, c.status, c.color, c.icon, c.description, c.created_at
+        ORDER BY c.created_at DESC
     ";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
+    $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     jsonResponse(true, 'Success', [
@@ -548,18 +770,17 @@ elseif ($action === 'admin_category_stats' || $action === 'category_stats') {
         jsonResponse(false, 'Loại không hợp lệ');
     }
 
-    $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM categories WHERE LOWER(name) = :name AND status != 'DELETED'");
+    $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM categories WHERE LOWER(name) = :name AND status != 'DELETED' AND user_id IS NULL");
     $stmtCheck->execute([':name' => strtolower($name)]);
     if ($stmtCheck->fetchColumn() > 0) {
-        jsonResponse(false, 'Danh mục đã tồn tại');
+        jsonResponse(false, 'Danh mục hệ thống đã tồn tại');
     }
 
     $stmt = $pdo->prepare("
         INSERT INTO categories (user_id, name, type, color, icon, description, status)
-        VALUES (:user_id, :name, :type, :color, :icon, :description, 'ACTIVE')
+        VALUES (NULL, :name, :type, :color, :icon, :description, 'ACTIVE')
     ");
     $stmt->execute([
-        ':user_id' => $_SESSION['admin_id'],
         ':name' => $name,
         ':type' => $type,
         ':color' => $color,
@@ -587,10 +808,16 @@ elseif ($action === 'admin_category_stats' || $action === 'category_stats') {
         jsonResponse(false, 'Trạng thái không hợp lệ');
     }
 
+    $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM categories WHERE LOWER(name) = :name AND status != 'DELETED' AND user_id IS NULL AND id != :id");
+    $stmtCheck->execute([':name' => strtolower($name), ':id' => $id]);
+    if ($stmtCheck->fetchColumn() > 0) {
+        jsonResponse(false, 'Danh mục hệ thống đã tồn tại');
+    }
+
     $stmt = $pdo->prepare("
         UPDATE categories
         SET name = :name, type = :type, color = :color, icon = :icon, description = :description, status = :status
-        WHERE id = :id
+        WHERE id = :id AND user_id IS NULL
     ");
     $stmt->execute([
         ':id' => $id,
@@ -613,7 +840,7 @@ elseif ($action === 'admin_category_stats' || $action === 'category_stats') {
         jsonResponse(false, 'Trạng thái không hợp lệ');
     }
 
-    $stmt = $pdo->prepare("UPDATE categories SET status = :status WHERE id = :id");
+    $stmt = $pdo->prepare("UPDATE categories SET status = :status WHERE id = :id AND user_id IS NULL");
     $stmt->execute([':status' => $status, ':id' => $id]);
     jsonResponse(true, 'Cập nhật trạng thái danh mục thành công');
 }
@@ -631,6 +858,14 @@ elseif ($action === 'admin_get_transactions') {
     $status = strtoupper(trim($_POST['status'] ?? $_GET['status'] ?? ''));
     $dateFrom = trim($_POST['date_from'] ?? $_GET['date_from'] ?? '');
     $dateTo = trim($_POST['date_to'] ?? $_GET['date_to'] ?? '');
+
+    // Validate date range
+    if ($dateFrom !== '' && $dateTo !== '' && strtotime($dateFrom) > strtotime($dateTo)) {
+        // Swap dates if from > to
+        $temp = $dateFrom;
+        $dateFrom = $dateTo;
+        $dateTo = $temp;
+    }
 
     $where = [];
     $params = [];
@@ -656,11 +891,11 @@ elseif ($action === 'admin_get_transactions') {
         $params[':status'] = $status;
     }
     if ($dateFrom !== '') {
-        $where[] = "t.transaction_date >= :date_from";
+        $where[] = "DATE(t.created_at) >= :date_from";
         $params[':date_from'] = $dateFrom;
     }
     if ($dateTo !== '') {
-        $where[] = "t.transaction_date <= :date_to";
+        $where[] = "DATE(t.created_at) <= :date_to";
         $params[':date_to'] = $dateTo;
     }
 
@@ -915,7 +1150,7 @@ elseif ($action === 'admin_get_settings') {
         if ($type === 'number') {
             $settings[$key] = is_numeric($value) ? (strpos($value, '.') !== false ? (float) $value : (int) $value) : 0;
         } elseif ($type === 'boolean') {
-            $settings[$key] = (int) $value;
+            $settings[$key] = in_array(strtolower($value), ['true', '1', 'yes', 'on'], true) ? 1 : 0;
         } else {
             $settings[$key] = $value;
         }
@@ -1042,7 +1277,7 @@ elseif ($action === 'get_support_tickets') {
     $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
     // Count total
-    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM support_tickets t INNER JOIN users u ON u.id = t.user_id $whereSql");
+    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM support_tickets t LEFT JOIN users u ON u.id = t.user_id $whereSql");
     $stmtCount->execute($params);
     $total = (int) $stmtCount->fetchColumn();
 
@@ -1060,7 +1295,7 @@ elseif ($action === 'get_support_tickets') {
             t.is_read,
             t.created_at
         FROM support_tickets t
-        INNER JOIN users u ON u.id = t.user_id
+        LEFT JOIN users u ON u.id = t.user_id
         $whereSql
         ORDER BY t.created_at DESC
         LIMIT :limit OFFSET :offset
@@ -1185,6 +1420,19 @@ elseif ($action === 'get_support_tickets') {
         ");
         $stmtUpdate->execute([':id' => $ticketId]);
 
+        // Get ticket info for notification
+        $stmtTicket = $pdo->prepare("SELECT user_id, subject FROM support_tickets WHERE id = :id");
+        $stmtTicket->execute([':id' => $ticketId]);
+        $ticketInfo = $stmtTicket->fetch(PDO::FETCH_ASSOC);
+
+        // Create notification for user
+        if ($ticketInfo) {
+            createNotification($pdo, $ticketInfo['user_id'], 'info', 
+                'Yêu cầu hỗ trợ đã được trả lời', 
+                "Yêu cầu '{$ticketInfo['subject']}' của bạn đã được admin trả lời.", 
+                '/public/user/support.php');
+        }
+
         $pdo->commit();
 
         logAdminAction($pdo, $_SESSION['admin_id'], 'REPLY_TICKET', "Phản hồi ticket #$ticketId", 'support_ticket', $ticketId);
@@ -1216,6 +1464,19 @@ elseif ($action === 'get_support_tickets') {
         WHERE id = :id
     ");
     $stmtUpdate->execute([':id' => $ticketId]);
+
+    // Get ticket info for notification
+    $stmtTicket = $pdo->prepare("SELECT user_id, subject FROM support_tickets WHERE id = :id");
+    $stmtTicket->execute([':id' => $ticketId]);
+    $ticketInfo = $stmtTicket->fetch(PDO::FETCH_ASSOC);
+
+    // Create notification for user
+    if ($ticketInfo) {
+        createNotification($pdo, $ticketInfo['user_id'], 'success', 
+            'Yêu cầu hỗ trợ đã được đóng', 
+            "Yêu cầu '{$ticketInfo['subject']}' của bạn đã được giải quyết và đóng.", 
+            '/public/user/support.php');
+    }
 
     jsonResponse(true, 'Đã đóng ticket');
 }
@@ -1354,6 +1615,193 @@ elseif ($action === 'admin_get_logs') {
     }, $rows);
 
     jsonResponse(true, 'Success', $logs);
+}
+
+// --- Admin Statistics Charts ---
+elseif ($action === 'chart_data') {
+    ensurePermission(['ADMIN'], $currentAdminRole);
+
+    $dateFrom = trim($_GET['date_from'] ?? '');
+    $dateTo = trim($_GET['date_to'] ?? '');
+
+    $where = [];
+    $params = [];
+    if ($dateFrom !== '') {
+        $where[] = "t.transaction_date >= :date_from";
+        $params[':date_from'] = $dateFrom;
+    }
+    if ($dateTo !== '') {
+        $where[] = "t.transaction_date <= :date_to";
+        $params[':date_to'] = $dateTo;
+    }
+    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+    // Get total income/expense for pie chart
+    $stmtPie = $pdo->prepare("
+        SELECT
+            SUM(CASE WHEN t.type = 'INCOME' THEN t.amount ELSE 0 END) AS total_income,
+            SUM(CASE WHEN t.type = 'EXPENSE' THEN t.amount ELSE 0 END) AS total_expense
+        FROM transactions t
+        $whereSql
+    ");
+    $stmtPie->execute($params);
+    $pieData = $stmtPie->fetch(PDO::FETCH_ASSOC) ?: ['total_income' => 0, 'total_expense' => 0];
+
+    // Get top categories for bar chart
+    $barWhere = ["t.type = 'EXPENSE'"];
+    if ($where) {
+        $barWhere = array_merge($barWhere, $where);
+    }
+    $barWhereSql = 'WHERE ' . implode(' AND ', $barWhere);
+
+    $stmtBar = $pdo->prepare("
+        SELECT c.name, COUNT(*) as count
+        FROM transactions t
+        INNER JOIN categories c ON c.id = t.category_id
+        $barWhereSql
+        GROUP BY c.id, c.name
+        ORDER BY count DESC
+        LIMIT 10
+    ");
+    $stmtBar->execute($params);
+    $barRows = $stmtBar->fetchAll(PDO::FETCH_ASSOC);
+
+    $barLabels = array_column($barRows, 'name');
+    $barData = array_column($barRows, 'count');
+
+    // Ensure we have valid data for charts
+    if (empty($barLabels)) {
+        $barLabels = [];
+        $barData = [];
+    }
+
+    jsonResponse(true, 'Success', [
+        'pie' => [
+            'income' => (float) $pieData['total_income'],
+            'expense' => (float) $pieData['total_expense']
+        ],
+        'bar' => [
+            'labels' => $barLabels,
+            'data' => array_map('intval', $barData)
+        ]
+    ]);
+}
+
+// --- Admin Export Reports ---
+elseif ($action === 'admin_export_report') {
+    $format = strtolower(trim($_GET['format'] ?? 'csv'));
+    $dateFrom = trim($_GET['date_from'] ?? '');
+    $dateTo = trim($_GET['date_to'] ?? '');
+    $reportType = trim($_GET['report_type'] ?? 'monthly_summary');
+
+    if (!in_array($format, ['csv', 'pdf'], true)) {
+        jsonResponse(false, 'Định dạng không hỗ trợ. Chỉ hỗ trợ csv và pdf.');
+    }
+
+    $where = [];
+    $params = [];
+    if ($dateFrom !== '') {
+        $where[] = "t.transaction_date >= :date_from";
+        $params[':date_from'] = $dateFrom;
+    }
+    if ($dateTo !== '') {
+        $where[] = "t.transaction_date <= :date_to";
+        $params[':date_to'] = $dateTo;
+    }
+    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+    // Get transactions data
+    $stmt = $pdo->prepare("
+        SELECT
+            t.transaction_date,
+            t.type,
+            t.amount,
+            t.note,
+            c.name as category_name,
+            u.name as user_name,
+            u.email as user_email
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+        LEFT JOIN users u ON t.user_id = u.id
+        $whereSql
+        ORDER BY t.transaction_date DESC, t.created_at DESC
+    ");
+    $stmt->execute($params);
+    $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Get summary data
+    $summaryStmt = $pdo->prepare("
+        SELECT
+            SUM(CASE WHEN t.type = 'INCOME' THEN t.amount ELSE 0 END) AS total_income,
+            SUM(CASE WHEN t.type = 'EXPENSE' THEN t.amount ELSE 0 END) AS total_expense,
+            COUNT(*) AS total_transactions
+        FROM transactions t
+        $whereSql
+    ");
+    $summaryStmt->execute($params);
+    $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC) ?: [
+        'total_income' => 0,
+        'total_expense' => 0,
+        'total_transactions' => 0
+    ];
+
+    if ($format === 'csv') {
+        // Generate CSV
+        $csvData = "Ngày,Loại,Số tiền,Danh mục,Người dùng,Ghi chú\n";
+
+        foreach ($transactions as $trans) {
+            $type = $trans['type'] === 'INCOME' ? 'Thu nhập' : 'Chi tiêu';
+            $amount = number_format($trans['amount'], 0, ',', '.');
+            $note = str_replace('"', '""', $trans['note'] ?? '');
+            $userName = $trans['user_name'] ?? 'N/A';
+
+            $csvData .= sprintf(
+                "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                $trans['transaction_date'],
+                $type,
+                $amount,
+                $trans['category_name'] ?? 'N/A',
+                $userName,
+                $note
+            );
+        }
+
+        // Set headers for CSV download
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="bao-cao-admin-' . date('Y-m-d') . '.csv"');
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        echo "\xEF\xBB\xBF"; // UTF-8 BOM for Excel
+        echo $csvData;
+        exit;
+
+    } elseif ($format === 'pdf') {
+        // For PDF, we'll return JSON data that can be used by frontend PDF generation
+        // Since server-side PDF generation requires additional libraries, we'll handle it client-side
+        jsonResponse(true, 'PDF data prepared', [
+            'summary' => [
+                'total_income' => (float) $summary['total_income'],
+                'total_expense' => (float) $summary['total_expense'],
+                'net' => (float) $summary['total_income'] - (float) $summary['total_expense'],
+                'total_transactions' => (int) $summary['total_transactions'],
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'report_type' => $reportType
+            ],
+            'transactions' => array_map(function($t) {
+                return [
+                    'date' => $t['transaction_date'],
+                    'type' => $t['type'] === 'INCOME' ? 'Thu nhập' : 'Chi tiêu',
+                    'amount' => (float) $t['amount'],
+                    'category' => $t['category_name'] ?? 'N/A',
+                    'user' => $t['user_name'] ?? 'N/A',
+                    'note' => $t['note'] ?? ''
+                ];
+            }, $transactions)
+        ]);
+    }
 }
 
 // --- Fallback ---

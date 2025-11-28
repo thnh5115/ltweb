@@ -122,7 +122,7 @@ function handleLogin($pdo, array $request)
         $_SESSION['user_avatar'] = $user['avatar_url'] ?? null;
 
         // Nếu là admin, đặt thêm session dành riêng cho admin
-        if (in_array($user['role'], ['ADMIN', 'SUPER_ADMIN', 'STAFF'], true)) {
+        if (in_array($user['role'], ['ADMIN'], true)) {
             $_SESSION['admin_id'] = $user['id'];
             $_SESSION['admin_email'] = $user['email'];
             $_SESSION['admin_name'] = $user['fullname'];
@@ -133,9 +133,7 @@ function handleLogin($pdo, array $request)
 
         // Determine redirect URL based on role
         $redirect = '/public/user/dashboard.php'; // Default fallback
-        if ($user['role'] === 'ADMIN' || $user['role'] === 'SUPER_ADMIN') {
-            $redirect = '/public/admin/admin_dashboard.php';
-        } elseif ($user['role'] === 'STAFF') {
+        if ($user['role'] === 'ADMIN') {
             $redirect = '/public/admin/admin_dashboard.php';
         } elseif ($user['role'] === 'USER') {
             $redirect = '/public/user/dashboard.php';

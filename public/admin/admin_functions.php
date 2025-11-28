@@ -7,7 +7,7 @@ function isAdminLoggedIn()
         return true;
     }
 
-    $allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'STAFF'];
+    $allowedRoles = ['ADMIN'];
     if (isset($_SESSION['user_id'], $_SESSION['user_role']) && in_array($_SESSION['user_role'], $allowedRoles, true)) {
         $_SESSION['admin_id']    = $_SESSION['user_id'];
         $_SESSION['admin_email'] = $_SESSION['user_email'] ?? null;

@@ -66,6 +66,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li>
+                <a href="support.php"
+                    class="menu-item <?php echo $current_page == 'support.php' ? 'active' : ''; ?>"
+                    aria-current="<?php echo $current_page == 'support.php' ? 'page' : 'false'; ?>">
+                    <i class="fas fa-headset"></i> Hỗ trợ
+                </a>
+            </li>
+            <li>
                 <a href="statistics.php"
                     class="menu-item <?php echo $current_page == 'statistics.php' ? 'active' : ''; ?>"
                     aria-current="<?php echo $current_page == 'statistics.php' ? 'page' : 'false'; ?>">

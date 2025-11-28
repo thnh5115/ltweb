@@ -311,6 +311,11 @@ include 'partials/navbar.php';
                     showToast('success', res.message);
                     loadProfile();
                     loadUserStats();
+                    const avatarUrl = $('#avatarUrlInput').val();
+                    const fullName = $('[name="full_name"]').val();
+                    if (typeof updateAccountAvatars === 'function') {
+                        updateAccountAvatars(avatarUrl, fullName);
+                    }
                 } else {
                     showToast('error', res.message);
                 }
@@ -403,7 +408,12 @@ include 'partials/navbar.php';
         });
 
         $('#avatarUrlInput').on('input', function () {
-            updateAvatarPreview($(this).val(), $('[name="full_name"]').val());
+            const url = $(this).val();
+            const fullName = $('[name="full_name"]').val();
+            updateAvatarPreview(url, fullName);
+            if (typeof updateAccountAvatars === 'function') {
+                updateAccountAvatars(url, fullName);
+            }
         });
     });
 
@@ -427,6 +437,9 @@ include 'partials/navbar.php';
                 $('#profileDobDisplay').text(data.date_of_birth ? formatDateReadable(data.date_of_birth) : 'Chưa cập nhật ngày sinh');
 
                 updateAvatarPreview(data.avatar_url, data.full_name);
+                if (typeof updateAccountAvatars === 'function') {
+                    updateAccountAvatars(data.avatar_url, data.full_name);
+                }
             }
         });
     }

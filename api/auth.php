@@ -87,7 +87,7 @@ function handleLogin($pdo, array $request)
     try {
         // Query user from database
         $stmt = $pdo->prepare("
-            SELECT id, fullname, email, password_hash, role, status
+            SELECT id, fullname, email, password_hash, role, status, avatar_url
             FROM users
             WHERE LOWER(email) = :email
             LIMIT 1
@@ -119,6 +119,7 @@ function handleLogin($pdo, array $request)
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_name'] = $user['fullname'];
         $_SESSION['user_role'] = $user['role'];
+        $_SESSION['user_avatar'] = $user['avatar_url'] ?? null;
 
         // Nếu là admin, đặt thêm session dành riêng cho admin
         if (in_array($user['role'], ['ADMIN', 'SUPER_ADMIN', 'STAFF'], true)) {

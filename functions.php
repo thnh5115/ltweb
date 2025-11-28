@@ -79,4 +79,34 @@ function createNotification(PDO $pdo, int $userId, string $type, string $title, 
         ':link' => $linkUrl ?: null
     ]);
 }
+
+function notificationExists(PDO $pdo, int $userId, string $title, ?string $linkUrl = null): bool
+{
+    $sql = "SELECT id FROM notifications WHERE user_id = :user_id AND title = :title";
+    $params = [
+        ':user_id' => $userId,
+        ':title' => $title
+    ];
+
+    if ($linkUrl !== null) {
+        $sql .= " AND link_url = :link";
+        $params[':link'] = $linkUrl;
+    } else {
+        $sql .= " AND link_url IS NULL";
+    }
+
+    $sql .= " LIMIT 1";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    return (bool) $stmt->fetchColumn();
+}
+
+function createNotificationIfMissing(PDO $pdo, int $userId, string $type, string $title, string $message, ?string $linkUrl = null): void
+{
+    if (!notificationExists($pdo, $userId, $title, $linkUrl)) {
+        createNotification($pdo, $userId, $type, $title, $message, $linkUrl);
+    }
+}
 ?>

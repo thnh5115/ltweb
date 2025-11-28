@@ -59,6 +59,8 @@
     });
 
     initNotificationDropdown();
+    initAccountMenu();
+    initAvatarFallbackHandler();
 });
 
 function updateThemeIcon(isDark) {
@@ -238,6 +240,7 @@ function refreshNotificationBadge(count) {
     } else {
         $badge.hide();
     }
+    updateAccountMenuBadge(count);
 }
 
 function createNotifItemHtml(item) {
@@ -291,4 +294,106 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function updateAccountAvatars(url, fullName) {
+    const hasImage = typeof url === 'string' && /^https?:\/\//i.test(url);
+    const $images = $('[data-avatar-type]');
+    const $fallbacks = $('[data-avatar-fallback]');
+
+    if (hasImage) {
+        $images.each(function () {
+            $(this).attr('src', url).removeClass('hidden');
+        });
+        $fallbacks.addClass('hidden');
+    } else {
+        $images.each(function () {
+            $(this).attr('src', '').addClass('hidden');
+        });
+        $fallbacks.removeClass('hidden');
+        if (fullName) {
+            $('[data-avatar-initial]').text(getInitialFromName(fullName));
+        }
+    }
+}
+
+function getInitialFromName(name) {
+    if (!name) {
+        return 'U';
+    }
+    const trimmed = name.trim();
+    if (!trimmed) {
+        return 'U';
+    }
+    const parts = trimmed.split(/\s+/);
+    const lastPart = parts[parts.length - 1];
+    return (lastPart.charAt(0) || 'U').toUpperCase();
+}
+
+function initAccountMenu() {
+    const $toggle = $('#accountMenuToggle');
+    const $dropdown = $('#accountMenuDropdown');
+
+    if (!$toggle.length || !$dropdown.length) {
+        return;
+    }
+
+    const openMenu = () => {
+        $dropdown.addClass('open');
+        $dropdown.attr('aria-hidden', 'false');
+        $toggle.attr('aria-expanded', 'true');
+    };
+
+    const closeMenu = () => {
+        $dropdown.removeClass('open');
+        $dropdown.attr('aria-hidden', 'true');
+        $toggle.attr('aria-expanded', 'false');
+    };
+
+    $toggle.on('click keydown', function (event) {
+        if (event.type === 'click' || event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            if ($dropdown.hasClass('open')) {
+                closeMenu();
+            } else {
+                openMenu();
+            }
+        }
+    });
+
+    $(document).on('click.accountMenu', function (event) {
+        if (!$(event.target).closest('.account-menu').length) {
+            closeMenu();
+        }
+    });
+
+    $(document).on('keydown.accountMenu', function (event) {
+        if (event.key === 'Escape') {
+            closeMenu();
+        }
+    });
+
+    $dropdown.find('a').on('click', function () {
+        closeMenu();
+    });
+}
+
+function updateAccountMenuBadge(count) {
+    const $pill = $('#accountMenuNotifCount');
+    if (!$pill.length) return;
+    if (count > 0) {
+        $pill.text(count > 99 ? '99+' : count);
+        $pill.show();
+    } else {
+        $pill.hide();
+    }
+}
+
+function initAvatarFallbackHandler() {
+    $(document).on('error', 'img[data-avatar-type]', function () {
+        const $img = $(this);
+        $img.addClass('hidden');
+        const type = $img.data('avatar-type');
+        $(`[data-avatar-fallback="${type}"]`).removeClass('hidden');
+    });
 }

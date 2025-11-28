@@ -625,10 +625,11 @@ function handleAddTransaction($pdo, $userId)
             jsonResponse(false, 'Vui lòng điền đầy đủ thông tin');
         }
 
-        $catStmt = $pdo->prepare("SELECT id FROM categories WHERE id = :id AND user_id = :user_id");
+        $catStmt = $pdo->prepare("SELECT id, name FROM categories WHERE id = :id AND user_id = :user_id");
         $catStmt->execute([':id' => $categoryId, ':user_id' => $userId]);
 
-        if (!$catStmt->fetch()) {
+        $category = $catStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$category) {
             jsonResponse(false, 'Danh mục không hợp lệ');
         }
 
@@ -645,6 +646,20 @@ function handleAddTransaction($pdo, $userId)
             ':date' => $date,
             ':note' => !empty($note) ? $note : null
         ]);
+
+        try {
+            $dateTime = DateTime::createFromFormat('Y-m-d', $date) ?: null;
+            $displayDate = $dateTime ? $dateTime->format('d/m/Y') : $date;
+            $amountText = formatMoney($amount);
+            $isIncome = $type === 'income';
+            $title = $isIncome ? 'Giao dịch thu nhập mới' : 'Giao dịch chi tiêu mới';
+            $actionVerb = $isIncome ? 'nhận' : 'chi';
+            $message = sprintf('Bạn vừa %s %s cho "%s" vào ngày %s.', $actionVerb, $amountText, $category['name'], $displayDate);
+            $linkUrl = '/public/user/transactions.php';
+            createNotification($pdo, $userId, $isIncome ? 'success' : 'warning', $title, $message, $linkUrl);
+        } catch (Throwable $notifyError) {
+            error_log('Transaction notification error: ' . $notifyError->getMessage());
+        }
 
         jsonResponse(true, 'Thêm giao dịch thành công!');
 
@@ -1813,7 +1828,7 @@ function handleProfileUpdate($pdo, $userId)
 
         $_SESSION['user_name'] = $fullName;
         $_SESSION['user_phone'] = $phone;
-        $_SESSION['user_avatar'] = $avatar !== '' ? $avatar : ($_SESSION['user_avatar'] ?? null);
+        $_SESSION['user_avatar'] = $avatar !== '' ? $avatar : null;
         if (!empty($email)) {
             $_SESSION['user_email'] = $email;
         }
@@ -1999,6 +2014,7 @@ function handleProfileOverview($pdo, $userId)
 
 function handleNotificationsList($pdo, $userId)
 {
+    syncBillNotifications($pdo, $userId);
     try {
         $unreadOnly = isset($_GET['unread_only']) && (int) $_GET['unread_only'] === 1;
         $status = strtolower(trim($_GET['status'] ?? ''));
@@ -2063,6 +2079,7 @@ function handleNotificationsList($pdo, $userId)
 
 function handleNotificationsUnreadCount($pdo, $userId)
 {
+    syncBillNotifications($pdo, $userId);
     try {
         $stmt = $pdo->prepare("SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = :user_id AND is_read = 0");
         $stmt->execute([':user_id' => $userId]);
@@ -2141,6 +2158,83 @@ function handleNotificationsDelete($pdo, $userId)
     } catch (PDOException $e) {
         error_log("Notifications Delete Error: " . $e->getMessage());
         jsonResponse(false, 'Loi khi xoa thong bao');
+    }
+}
+
+function syncBillNotifications(PDO $pdo, int $userId): void
+{
+    try {
+        $today = date('Y-m-d');
+        $tomorrow = date('Y-m-d', strtotime('+1 day'));
+        $upcomingEnd = date('Y-m-d', strtotime('+3 days'));
+        $linkBase = '/public/user/bill_calendar.php?highlight=';
+
+        $overdueStmt = $pdo->prepare("
+            SELECT id, name, amount, due_date
+            FROM bills
+            WHERE user_id = :user_id
+              AND status IN ('PENDING','OVERDUE')
+              AND due_date < :today
+        ");
+        $overdueStmt->execute([':user_id' => $userId, ':today' => $today]);
+        foreach ($overdueStmt->fetchAll(PDO::FETCH_ASSOC) as $bill) {
+            $linkUrl = $linkBase . $bill['id'];
+            $title = 'Hoa don qua han: ' . $bill['name'];
+            $message = sprintf(
+                'Hoa don "%s" tri gia %s da qua han tu ngay %s. Vui long thanh toan som.',
+                $bill['name'],
+                formatMoney((float) $bill['amount']),
+                date('d/m/Y', strtotime($bill['due_date']))
+            );
+            createNotificationIfMissing($pdo, $userId, 'error', $title, $message, $linkUrl);
+        }
+
+        $dueTodayStmt = $pdo->prepare("
+            SELECT id, name, amount, due_date
+            FROM bills
+            WHERE user_id = :user_id
+              AND status IN ('PENDING','OVERDUE')
+              AND due_date = :today
+        ");
+        $dueTodayStmt->execute([':user_id' => $userId, ':today' => $today]);
+        foreach ($dueTodayStmt->fetchAll(PDO::FETCH_ASSOC) as $bill) {
+            $linkUrl = $linkBase . $bill['id'];
+            $title = 'Hoa don den han hom nay: ' . $bill['name'];
+            $message = sprintf(
+                'Hoa don "%s" tri gia %s den han vao ngay %s. Hay thanh toan ngay hom nay.',
+                $bill['name'],
+                formatMoney((float) $bill['amount']),
+                date('d/m/Y', strtotime($bill['due_date']))
+            );
+            createNotificationIfMissing($pdo, $userId, 'warning', $title, $message, $linkUrl);
+        }
+
+        $upcomingStmt = $pdo->prepare("
+            SELECT id, name, amount, due_date
+            FROM bills
+            WHERE user_id = :user_id
+              AND status IN ('PENDING','OVERDUE')
+              AND due_date BETWEEN :tomorrow AND :upcoming_end
+        ");
+        $upcomingStmt->execute([
+            ':user_id' => $userId,
+            ':tomorrow' => $tomorrow,
+            ':upcoming_end' => $upcomingEnd
+        ]);
+        foreach ($upcomingStmt->fetchAll(PDO::FETCH_ASSOC) as $bill) {
+            $linkUrl = $linkBase . $bill['id'];
+            $title = 'Hoa don sap den han: ' . $bill['name'];
+            $message = sprintf(
+                'Hoa don "%s" tri gia %s se den han vao ngay %s. Ban nen chuan bi thanh toan.',
+                $bill['name'],
+                formatMoney((float) $bill['amount']),
+                date('d/m/Y', strtotime($bill['due_date']))
+            );
+            createNotificationIfMissing($pdo, $userId, 'reminder', $title, $message, $linkUrl);
+        }
+
+    } catch (Throwable $e) {
+        error_log('Sync bill notifications error: ' . $e->getMessage());
     }
 }
 
@@ -2309,9 +2403,10 @@ function handleMarkBillPaid($pdo, $userId)
             jsonResponse(false, 'ID hoa don khong hop le');
         }
 
-        $checkStmt = $pdo->prepare("SELECT id FROM bills WHERE id = :id AND user_id = :user_id");
+        $checkStmt = $pdo->prepare("SELECT id, name, amount FROM bills WHERE id = :id AND user_id = :user_id");
         $checkStmt->execute([':id' => $id, ':user_id' => $userId]);
-        if (!$checkStmt->fetch()) {
+        $bill = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$bill) {
             jsonResponse(false, 'Khong tim thay hoa don');
         }
 
@@ -2326,6 +2421,20 @@ function handleMarkBillPaid($pdo, $userId)
             ':id' => $id,
             ':user_id' => $userId
         ]);
+
+        try {
+            $linkUrl = '/public/user/bill_calendar.php?highlight=' . $bill['id'];
+            $message = sprintf('Bạn đã thanh toán hóa đơn "%s" với số tiền %s.', $bill['name'], formatMoney((float) $bill['amount']));
+            createNotification($pdo, $userId, 'success', 'Đã thanh toán hóa đơn', $message, $linkUrl);
+
+            $markOldNotif = $pdo->prepare("UPDATE notifications SET is_read = 1, read_at = NOW() WHERE user_id = :user_id AND link_url = :link AND is_read = 0");
+            $markOldNotif->execute([
+                ':user_id' => $userId,
+                ':link' => $linkUrl
+            ]);
+        } catch (Throwable $notifyError) {
+            error_log('Bill paid notification error: ' . $notifyError->getMessage());
+        }
 
         jsonResponse(true, 'Da danh dau thanh toan');
 

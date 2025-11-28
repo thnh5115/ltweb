@@ -69,6 +69,9 @@ elseif ($action === 'get_stats_overview') {
 
 } elseif ($action === 'get_stats_timeseries') {
     handleGetStatsTimeseries($pdo, $userId);
+
+} elseif ($action === 'top_categories') {
+    handleTopCategories($pdo, $userId);
 }
 
 // ============================================
@@ -145,6 +148,9 @@ elseif ($action === 'profile_get') {
 
 } elseif ($action === 'profile_update_settings') {
     handleProfileUpdateSettings($pdo, $userId);
+
+} elseif ($action === 'profile_overview') {
+    handleProfileOverview($pdo, $userId);
 }
 
 // ============================================
@@ -422,54 +428,142 @@ function handleDeleteCategory($pdo, $userId)
 function handleGetTransactions($pdo, $userId)
 {
     try {
-        $search = $_GET['search'] ?? '';
-        $category = $_GET['category'] ?? '';
-        $type = $_GET['type'] ?? '';
-        $date = $_GET['date'] ?? '';
+        $page = max(1, (int) ($_GET['page'] ?? $_POST['page'] ?? 1));
+        $limit = max(1, min(100, (int) ($_GET['limit'] ?? $_POST['limit'] ?? 10)));
+        $offset = ($page - 1) * $limit;
 
-        $sql = "SELECT t.id, t.amount, t.type, t.transaction_date as date, t.note,
-                       t.category_id,
-                       c.name as category_name,
-                       c.icon as category_icon,
-                       c.color as category_color
-                FROM transactions t
-                INNER JOIN categories c ON t.category_id = c.id
-                WHERE t.user_id = :user_id";
+        $search = trim($_GET['search'] ?? $_POST['search'] ?? '');
+        $category = (int) ($_GET['category'] ?? $_POST['category'] ?? 0);
+        $type = strtoupper(trim($_GET['type'] ?? $_POST['type'] ?? ''));
+        $status = strtoupper(trim($_GET['status'] ?? $_POST['status'] ?? ''));
+        $singleDate = trim($_GET['date'] ?? $_POST['date'] ?? '');
+        $dateFrom = trim($_GET['date_from'] ?? $_POST['date_from'] ?? '');
+        $dateTo = trim($_GET['date_to'] ?? $_POST['date_to'] ?? '');
+        $minAmountInput = $_GET['min_amount'] ?? $_POST['min_amount'] ?? null;
+        $maxAmountInput = $_GET['max_amount'] ?? $_POST['max_amount'] ?? null;
+        $minAmount = ($minAmountInput === '' || $minAmountInput === null) ? null : (float) $minAmountInput;
+        $maxAmount = ($maxAmountInput === '' || $maxAmountInput === null) ? null : (float) $maxAmountInput;
 
+        if ($singleDate !== '') {
+            $dateFrom = $singleDate;
+            $dateTo = $singleDate;
+        }
+
+        $sortFieldInput = strtolower($_GET['sort_field'] ?? $_POST['sort_field'] ?? 'date');
+        $sortDir = strtoupper($_GET['sort_dir'] ?? $_POST['sort_dir'] ?? 'DESC');
+        $sortMap = [
+            'date' => 't.transaction_date',
+            'amount' => 't.amount',
+            'created_at' => 't.created_at',
+            'category' => 'c.name'
+        ];
+        $sortField = $sortMap[$sortFieldInput] ?? $sortMap['date'];
+        $sortDir = $sortDir === 'ASC' ? 'ASC' : 'DESC';
+
+        $where = ['t.user_id = :user_id'];
         $params = [':user_id' => $userId];
 
-        if (!empty($search)) {
-            $sql .= " AND t.note LIKE :search";
+        if ($search !== '') {
+            $where[] = '(t.note LIKE :search OR c.name LIKE :search)';
             $params[':search'] = '%' . $search . '%';
         }
 
-        if (!empty($category)) {
-            $sql .= " AND t.category_id = :category";
+        if ($category > 0) {
+            $where[] = 't.category_id = :category';
             $params[':category'] = $category;
         }
 
-        if (!empty($type)) {
-            $sql .= " AND t.type = :type";
-            $params[':type'] = strtoupper($type);
+        if ($type !== '' && in_array($type, ['INCOME', 'EXPENSE'], true)) {
+            $where[] = 't.type = :type';
+            $params[':type'] = $type;
         }
 
-        if (!empty($date)) {
-            $sql .= " AND t.transaction_date = :date";
-            $params[':date'] = $date;
+        if ($status !== '' && in_array($status, ['COMPLETED', 'PENDING', 'CANCELED', 'FLAGGED'], true)) {
+            $where[] = 't.status = :status';
+            $params[':status'] = $status;
         }
 
-        $sql .= " ORDER BY t.transaction_date DESC, t.created_at DESC";
+        if ($dateFrom !== '') {
+            $where[] = 't.transaction_date >= :date_from';
+            $params[':date_from'] = $dateFrom;
+        }
+
+        if ($dateTo !== '') {
+            $where[] = 't.transaction_date <= :date_to';
+            $params[':date_to'] = $dateTo;
+        }
+
+        if ($minAmount !== null) {
+            $where[] = 't.amount >= :min_amount';
+            $params[':min_amount'] = $minAmount;
+        }
+
+        if ($maxAmount !== null) {
+            $where[] = 't.amount <= :max_amount';
+            $params[':max_amount'] = $maxAmount;
+        }
+
+        $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+        $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN categories c ON t.category_id = c.id $whereSql");
+        $stmtCount->execute($params);
+        $total = (int) $stmtCount->fetchColumn();
+
+        $sql = "
+            SELECT t.id, t.amount, t.type, t.transaction_date as date, t.note,
+                   t.category_id, t.status,
+                   c.name as category_name,
+                   c.icon as category_icon,
+                   c.color as category_color
+            FROM transactions t
+            INNER JOIN categories c ON t.category_id = c.id
+            $whereSql
+            ORDER BY $sortField $sortDir, t.id DESC
+            LIMIT :limit OFFSET :offset
+        ";
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($transactions as &$trans) {
             $trans['type'] = strtolower($trans['type']);
+            $trans['status'] = strtolower($trans['status']);
             $trans['amount'] = (float) $trans['amount'];
         }
 
-        jsonResponse(true, 'Success', $transactions);
+        $summaryStmt = $pdo->prepare("
+            SELECT 
+                SUM(CASE WHEN t.type = 'INCOME' THEN t.amount ELSE 0 END) AS total_income,
+                SUM(CASE WHEN t.type = 'EXPENSE' THEN t.amount ELSE 0 END) AS total_expense
+            FROM transactions t
+            INNER JOIN categories c ON t.category_id = c.id
+            $whereSql
+        ");
+        $summaryStmt->execute($params);
+        $summaryRow = $summaryStmt->fetch(PDO::FETCH_ASSOC) ?: ['total_income' => 0, 'total_expense' => 0];
+        $totalIncome = (float) ($summaryRow['total_income'] ?? 0);
+        $totalExpense = (float) ($summaryRow['total_expense'] ?? 0);
+
+        jsonResponse(true, 'Success', [
+            'items' => $transactions,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $total,
+                'total_pages' => max(1, (int) ceil($total / $limit))
+            ],
+            'summary' => [
+                'total_income' => $totalIncome,
+                'total_expense' => $totalExpense,
+                'balance' => $totalIncome - $totalExpense
+            ]
+        ]);
 
     } catch (PDOException $e) {
         error_log("Get Transactions Error: " . $e->getMessage());
@@ -1621,7 +1715,17 @@ function handleProfileGet($pdo, $userId)
 {
     try {
         $stmt = $pdo->prepare("
-            SELECT id, fullname AS full_name, email, phone, avatar_url, created_at
+            SELECT 
+                id,
+                fullname AS full_name,
+                email,
+                phone,
+                avatar_url,
+                address,
+                DATE_FORMAT(date_of_birth, '%Y-%m-%d') AS date_of_birth,
+                gender,
+                bio,
+                created_at
             FROM users
             WHERE id = :id
         ");
@@ -1647,6 +1751,10 @@ function handleProfileUpdate($pdo, $userId)
         $phone = trim($_POST['phone'] ?? '');
         $avatar = trim($_POST['avatar_url'] ?? '');
         $email = trim($_POST['email'] ?? '');
+        $address = trim($_POST['address'] ?? '');
+        $gender = strtoupper(trim($_POST['gender'] ?? ''));
+        $bio = trim($_POST['bio'] ?? '');
+        $dobInput = trim($_POST['date_of_birth'] ?? $_POST['dob'] ?? '');
 
         if (empty($fullName)) {
             jsonResponse(false, 'Ho ten khong duoc de trong');
@@ -1660,16 +1768,38 @@ function handleProfileUpdate($pdo, $userId)
             }
         }
 
+        $allowedGenders = ['MALE','FEMALE','OTHER','PREFER_NOT'];
+        if (!in_array($gender, $allowedGenders, true)) {
+            $gender = 'OTHER';
+        }
+
+        $dob = null;
+        if ($dobInput !== '') {
+            $dt = DateTime::createFromFormat('Y-m-d', $dobInput);
+            if ($dt === false) {
+                jsonResponse(false, 'Ngay sinh khong hop le (dinh dang YYYY-MM-DD)');
+            }
+            $dob = $dt->format('Y-m-d');
+        }
+
         $sql = "
             UPDATE users
             SET fullname = :fullname,
                 phone = :phone,
-                avatar_url = :avatar_url
+                avatar_url = :avatar_url,
+                address = :address,
+                date_of_birth = :dob,
+                gender = :gender,
+                bio = :bio
         ";
         $params = [
             ':fullname' => $fullName,
             ':phone' => $phone !== '' ? $phone : null,
             ':avatar_url' => $avatar !== '' ? $avatar : null,
+            ':address' => $address !== '' ? $address : null,
+            ':dob' => $dob,
+            ':gender' => $gender,
+            ':bio' => $bio !== '' ? $bio : null,
             ':id' => $userId
         ];
         if (!empty($email)) {
@@ -1682,6 +1812,8 @@ function handleProfileUpdate($pdo, $userId)
         $stmt->execute($params);
 
         $_SESSION['user_name'] = $fullName;
+        $_SESSION['user_phone'] = $phone;
+        $_SESSION['user_avatar'] = $avatar !== '' ? $avatar : ($_SESSION['user_avatar'] ?? null);
         if (!empty($email)) {
             $_SESSION['user_email'] = $email;
         }
@@ -1805,6 +1937,58 @@ function handleProfileUpdateSettings($pdo, $userId)
     }
 }
 
+function handleProfileOverview($pdo, $userId)
+{
+    try {
+        $stmtTransactions = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE user_id = :user_id");
+        $stmtTransactions->execute([':user_id' => $userId]);
+        $transactions = (int) $stmtTransactions->fetchColumn();
+
+        $stmtCategories = $pdo->prepare("SELECT COUNT(*) FROM categories WHERE user_id = :user_id");
+        $stmtCategories->execute([':user_id' => $userId]);
+        $categories = (int) $stmtCategories->fetchColumn();
+
+        $stmtExpense = $pdo->prepare("
+            SELECT COALESCE(SUM(amount), 0)
+            FROM transactions
+            WHERE user_id = :user_id AND type = 'EXPENSE'
+        ");
+        $stmtExpense->execute([':user_id' => $userId]);
+        $totalExpense = (float) $stmtExpense->fetchColumn();
+
+        ensureUserSettings($pdo, $userId);
+        $stmtUser = $pdo->prepare("
+            SELECT 
+                u.created_at, 
+                u.status,
+                u.last_login_at,
+                COALESCE(us.default_currency, 'VND') AS default_currency
+            FROM users u
+            LEFT JOIN user_settings us ON us.user_id = u.id
+            WHERE u.id = :id
+            LIMIT 1
+        ");
+        $stmtUser->execute([':id' => $userId]);
+        $userRow = $stmtUser->fetch(PDO::FETCH_ASSOC);
+
+        $data = [
+            'transactions' => $transactions,
+            'categories' => $categories,
+            'total_expense' => $totalExpense,
+            'joined_at' => $userRow['created_at'] ?? null,
+            'status' => $userRow['status'] ?? 'ACTIVE',
+            'last_login_at' => $userRow['last_login_at'] ?? null,
+            'default_currency' => $userRow['default_currency'] ?? 'VND'
+        ];
+
+        jsonResponse(true, 'Success', $data);
+
+    } catch (PDOException $e) {
+        error_log('Profile Overview Error: ' . $e->getMessage());
+        jsonResponse(false, 'Loi khi tai thong tin tai khoan');
+    }
+}
+
 // ============================================
 // PROFILE HANDLERS (MODULE 10) - END
 // ============================================
@@ -1817,6 +2001,14 @@ function handleNotificationsList($pdo, $userId)
 {
     try {
         $unreadOnly = isset($_GET['unread_only']) && (int) $_GET['unread_only'] === 1;
+        $status = strtolower(trim($_GET['status'] ?? ''));
+        $type = trim($_GET['type'] ?? '');
+        $date = trim($_GET['date'] ?? '');
+        $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 100;
+        if ($limit <= 0) {
+            $limit = 10;
+        }
+        $limit = min($limit, 100);
 
         $sql = "
             SELECT id, type, title, message, link_url, is_read, read_at, created_at
@@ -1829,7 +2021,26 @@ function handleNotificationsList($pdo, $userId)
             $sql .= " AND is_read = 0";
         }
 
-        $sql .= " ORDER BY created_at DESC LIMIT 100";
+        if ($status === 'unread') {
+            $sql .= " AND is_read = 0";
+        } elseif ($status === 'read') {
+            $sql .= " AND is_read = 1";
+        }
+
+        if ($type !== '') {
+            $sql .= " AND type = :type";
+            $params[':type'] = $type;
+        }
+
+        if ($date !== '') {
+            $dateObj = DateTime::createFromFormat('Y-m-d', $date);
+            if ($dateObj) {
+                $sql .= " AND DATE(created_at) = :created_date";
+                $params[':created_date'] = $dateObj->format('Y-m-d');
+            }
+        }
+
+        $sql .= " ORDER BY created_at DESC LIMIT $limit";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);

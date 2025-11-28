@@ -23,8 +23,18 @@ if (!isset($_SESSION['admin_id'])) {
     jsonResponse(false, 'Unauthorized');
 }
 
+$currentAdminRole = $_SESSION['admin_role'] ?? 'ADMIN';
+
+function ensurePermission(array $allowedRoles, $currentRole)
+{
+    if (!in_array($currentRole, $allowedRoles, true)) {
+        jsonResponse(false, 'Bạn không có quyền thực hiện thao tác này');
+    }
+}
+
 // --- Dashboard Summary ---
 if ($action === 'get_dashboard_summary') {
+    ensurePermission(['SUPER_ADMIN','ADMIN','STAFF'], $currentAdminRole);
     $totalUsers = (int) $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
     $totalCategories = (int) $pdo->query("SELECT COUNT(*) FROM categories WHERE status != 'DELETED'")->fetchColumn();
     $totalTransactions = (int) $pdo->query("SELECT COUNT(*) FROM transactions")->fetchColumn();
@@ -54,6 +64,7 @@ if ($action === 'get_dashboard_summary') {
 
 // --- Dashboard Chart (monthly expense current year) ---
 elseif ($action === 'get_dashboard_chart') {
+    ensurePermission(['SUPER_ADMIN','ADMIN','STAFF'], $currentAdminRole);
     $stmt = $pdo->prepare("
         SELECT MONTH(transaction_date) AS m, COALESCE(SUM(amount),0) AS total
         FROM transactions
@@ -85,6 +96,7 @@ elseif ($action === 'get_dashboard_chart') {
 
 // --- Recent Transactions ---
 elseif ($action === 'get_recent_transactions') {
+    ensurePermission(['SUPER_ADMIN','ADMIN','STAFF'], $currentAdminRole);
     $stmt = $pdo->prepare("
         SELECT 
             t.id,
@@ -120,41 +132,91 @@ elseif ($action === 'get_recent_transactions') {
 }
 
 // --- Recent Users ---
-elseif ($action === 'get_recent_users') {
-    $stmt = $pdo->prepare("
-        SELECT id, fullname AS name, email, created_at
-        FROM users
-        ORDER BY created_at DESC, id DESC
-        LIMIT 10
-    ");
-    $stmt->execute();
-    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    jsonResponse(true, 'Success', $users);
-}
+elseif ($action === 'admin_get_logs') {
+    ensurePermission(['SUPER_ADMIN','ADMIN'], $currentAdminRole);
 
-// --- Admin User Management ---
-elseif ($action === 'admin_get_users') {
-    $page = max(1, (int) ($_POST['page'] ?? $_GET['page'] ?? 1));
-    $limit = max(1, min(100, (int) ($_POST['limit'] ?? $_GET['limit'] ?? 10)));
+    $page = max(1, (int) ($_GET['page'] ?? $_POST['page'] ?? 1));
+    $limit = max(1, min(100, (int) ($_GET['limit'] ?? $_POST['limit'] ?? 20)));
     $offset = ($page - 1) * $limit;
 
-    $search = trim($_POST['search'] ?? $_GET['search'] ?? '');
-    $role = trim($_POST['role'] ?? $_GET['role'] ?? '');
-    $status = trim($_POST['status'] ?? $_GET['status'] ?? '');
+    $search = trim($_GET['search'] ?? $_POST['search'] ?? '');
+    $actionFilter = trim($_GET['log_action'] ?? $_POST['log_action'] ?? '');
+    $dateFrom = trim($_GET['date_from'] ?? $_POST['date_from'] ?? '');
+    $dateTo = trim($_GET['date_to'] ?? $_POST['date_to'] ?? '');
 
     $where = [];
     $params = [];
 
     if ($search !== '') {
-        $where[] = "(LOWER(u.fullname) LIKE :search OR LOWER(u.email) LIKE :search)";
+        $where[] = "(LOWER(u.fullname) LIKE :search OR LOWER(al.description) LIKE :search OR al.ip_address LIKE :search)";
         $params[':search'] = '%' . strtolower($search) . '%';
     }
-    if ($role !== '') {
-        $where[] = "u.role = :role";
-        $params[':role'] = strtoupper($role);
+
+    if ($actionFilter !== '') {
+        $where[] = 'al.action = :action_filter';
+        $params[':action_filter'] = $actionFilter;
     }
-    if ($status !== '') {
-        $where[] = "u.status = :status";
+
+    if ($dateFrom !== '') {
+        $where[] = 'al.created_at >= :date_from';
+        $params[':date_from'] = $dateFrom . ' 00:00:00';
+    }
+
+    if ($dateTo !== '') {
+        $where[] = 'al.created_at <= :date_to';
+        $params[':date_to'] = $dateTo . ' 23:59:59';
+    }
+
+    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM admin_logs al LEFT JOIN users u ON u.id = al.admin_id $whereSql");
+    $stmtCount->execute($params);
+    $total = (int) $stmtCount->fetchColumn();
+
+    $stmt = $pdo->prepare("
+        SELECT al.*, u.fullname AS admin_name, u.email AS admin_email
+        FROM admin_logs al
+        LEFT JOIN users u ON u.id = al.admin_id
+        $whereSql
+        ORDER BY al.created_at DESC
+        LIMIT :limit OFFSET :offset
+    ");
+    foreach ($params as $key => $value) {
+        $stmt->bindValue($key, $value);
+    }
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $logs = array_map(function ($row) {
+        return [
+            'time' => $row['created_at'],
+            'user' => $row['admin_name'] ?: 'Hệ thống',
+            'email' => $row['admin_email'] ?? null,
+            'action' => $row['action'],
+            'ip' => $row['ip_address'] ?? '',
+            'note' => $row['description'] ?? '',
+            'target_type' => $row['target_type'],
+            'target_id' => $row['target_id'],
+            'meta' => $row['meta'] ? json_decode($row['meta'], true) : null
+        ];
+    }, $rows);
+
+    jsonResponse(true, 'Success', [
+        'items' => $logs,
+        'pagination' => [
+            'page' => $page,
+            'limit' => $limit,
+            'total' => $total
+        ]
+    ]);
+}
+
+// --- Fallback ---
+else {
+    jsonResponse(false, 'Invalid action');
+}
         $params[':status'] = strtoupper($status);
     }
 
@@ -212,6 +274,7 @@ elseif ($action === 'admin_get_users') {
         'summary' => $summary
     ]);
 } elseif ($action === 'admin_get_user_detail') {
+    ensurePermission(['SUPER_ADMIN','ADMIN'], $currentAdminRole);
     $id = (int) ($_POST['id'] ?? $_GET['id'] ?? 0);
     if ($id <= 0) {
         jsonResponse(false, 'Thiếu id người dùng');
@@ -247,6 +310,7 @@ elseif ($action === 'admin_get_users') {
     }
     jsonResponse(true, 'Success', $user);
 } elseif ($action === 'admin_create_user') {
+    ensurePermission(['SUPER_ADMIN'], $currentAdminRole);
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -278,7 +342,7 @@ elseif ($action === 'admin_get_users') {
 
     $newId = $pdo->lastInsertId();
 
-    logActivity($pdo, $_SESSION['admin_id'], 'CREATE_USER', "Created user #$newId ($email)");
+    logAdminAction($pdo, $_SESSION['admin_id'], 'CREATE_USER', "Tạo người dùng #$newId ($email)", 'user', $newId);
 
     jsonResponse(true, 'Tạo người dùng thành công', [
         'id' => $newId,
@@ -286,6 +350,7 @@ elseif ($action === 'admin_get_users') {
         'role' => $role
     ]);
 } elseif ($action === 'admin_update_user_status') {
+    ensurePermission(['SUPER_ADMIN','ADMIN'], $currentAdminRole);
     $id = (int) ($_POST['id'] ?? 0);
     $status = strtoupper(trim($_POST['status'] ?? ''));
     if ($id <= 0 || $status === '') {
@@ -299,23 +364,116 @@ elseif ($action === 'admin_get_users') {
     $stmt = $pdo->prepare("UPDATE users SET status = :status WHERE id = :id");
     $stmt->execute([':status' => $status, ':id' => $id]);
 
-    logActivity($pdo, $_SESSION['admin_id'], 'UPDATE_USER', "Updated user #$id status to $status");
+    logAdminAction($pdo, $_SESSION['admin_id'], 'UPDATE_USER_STATUS', "Đổi trạng thái người dùng #$id sang $status", 'user', $id, ['status' => $status]);
 
     jsonResponse(true, 'Cập nhật trạng thái thành công');
 } elseif ($action === 'admin_update_user_role') {
+    ensurePermission(['SUPER_ADMIN'], $currentAdminRole);
     $id = (int) ($_POST['id'] ?? 0);
     $role = strtoupper(trim($_POST['role'] ?? ''));
     if ($id <= 0 || $role === '') {
         jsonResponse(false, 'Thiếu id hoặc role');
     }
-    $allowed = ['ADMIN', 'USER'];
+    $allowed = ['SUPER_ADMIN','ADMIN','STAFF','USER'];
     if (!in_array($role, $allowed, true)) {
         jsonResponse(false, 'Role không hợp lệ');
     }
 
     $stmt = $pdo->prepare("UPDATE users SET role = :role WHERE id = :id");
     $stmt->execute([':role' => $role, ':id' => $id]);
+    logAdminAction($pdo, $_SESSION['admin_id'], 'UPDATE_USER_ROLE', "Đổi quyền user #$id sang $role", 'user', $id, ['role' => $role]);
     jsonResponse(true, 'Cập nhật quyền thành công');
+} elseif ($action === 'admin_send_notification') {
+    ensurePermission(['SUPER_ADMIN','ADMIN'], $currentAdminRole);
+
+    $title = trim($_POST['title'] ?? '');
+    $message = trim($_POST['message'] ?? '');
+    $type = strtolower(trim($_POST['type'] ?? 'info'));
+    $linkUrl = trim($_POST['link_url'] ?? '');
+    $scope = strtolower(trim($_POST['scope'] ?? 'all'));
+    $targetUserId = (int) ($_POST['user_id'] ?? 0);
+
+    if ($title === '' || $message === '') {
+        jsonResponse(false, 'Vui lòng nhập tiêu đề và nội dung thông báo');
+    }
+
+    $allowedTypes = ['info','success','warning','error','reminder'];
+    if (!in_array($type, $allowedTypes, true)) {
+        $type = 'info';
+    }
+
+    $linkUrl = $linkUrl !== '' ? $linkUrl : null;
+
+    $recipients = 0;
+
+    try {
+        $pdo->beginTransaction();
+
+        if ($scope === 'single') {
+            if ($targetUserId <= 0) {
+                throw new RuntimeException('Thiếu người nhận thông báo');
+            }
+
+            $stmtUser = $pdo->prepare("SELECT id FROM users WHERE id = :id LIMIT 1");
+            $stmtUser->execute([':id' => $targetUserId]);
+            if (!$stmtUser->fetchColumn()) {
+                throw new RuntimeException('Không tìm thấy người dùng');
+            }
+
+            createNotification($pdo, $targetUserId, $type, $title, $message, $linkUrl);
+            $recipients = 1;
+
+        } else {
+            $userStmt = $pdo->prepare("SELECT id FROM users WHERE status = 'ACTIVE'");
+            $userStmt->execute();
+
+            $insertStmt = $pdo->prepare("INSERT INTO notifications (user_id, type, title, message, link_url) VALUES (:user_id, :type, :title, :message, :link)");
+
+            while (($userId = $userStmt->fetchColumn()) !== false) {
+                $insertStmt->execute([
+                    ':user_id' => (int) $userId,
+                    ':type' => $type,
+                    ':title' => $title,
+                    ':message' => $message,
+                    ':link' => $linkUrl
+                ]);
+                $recipients++;
+            }
+
+            if ($recipients === 0) {
+                throw new RuntimeException('Không có người dùng nào để gửi thông báo');
+            }
+        }
+
+        $pdo->commit();
+
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('Admin Send Notification Error: ' . $e->getMessage());
+        jsonResponse(false, $e->getMessage() ?: 'Không thể gửi thông báo');
+    }
+
+    logAdminAction(
+        $pdo,
+        $_SESSION['admin_id'],
+        'ADMIN_BROADCAST_NOTIFICATION',
+        $scope === 'single'
+            ? "Gửi thông báo tới user #$targetUserId"
+            : 'Gửi thông báo tới tất cả người dùng',
+        $scope === 'single' ? 'user' : 'broadcast',
+        $scope === 'single' ? $targetUserId : null,
+        [
+            'type' => $type,
+            'title' => $title,
+            'recipients' => $recipients
+        ]
+    );
+
+    jsonResponse(true, 'Đã gửi thông báo thành công', [
+        'recipients' => $recipients
+    ]);
 }
 
 // --- Categories (Admin) ---
@@ -840,7 +998,7 @@ elseif ($action === 'admin_get_settings') {
 
         $pdo->commit();
 
-        logActivity($pdo, $_SESSION['admin_id'], 'UPDATE_SETTINGS', 'Updated system settings');
+        logAdminAction($pdo, $_SESSION['admin_id'], 'UPDATE_SETTINGS', 'Cập nhật cấu hình hệ thống', 'system_settings', null);
 
         jsonResponse(true, 'Đã lưu cài đặt thành công');
 
@@ -1029,7 +1187,7 @@ elseif ($action === 'get_support_tickets') {
 
         $pdo->commit();
 
-        logActivity($pdo, $_SESSION['admin_id'], 'REPLY_TICKET', "Replied to ticket #$ticketId");
+        logAdminAction($pdo, $_SESSION['admin_id'], 'REPLY_TICKET', "Phản hồi ticket #$ticketId", 'support_ticket', $ticketId);
 
         jsonResponse(true, 'Đã gửi trả lời');
 

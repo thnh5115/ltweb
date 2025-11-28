@@ -396,23 +396,27 @@ include 'partials/navbar.php';
         const endDate = document.getElementById('endDate')?.value || '';
         const format = document.getElementById('export_format')?.value || 'csv';
 
-        showToast('info', 'Đang xuất báo cáo...');
+        const params = new URLSearchParams({
+            action: 'export_statistics',
+            period,
+            format
+        });
 
-        // Build URL with parameters
-        let url = `../api/data.php?action=export_statistics&period=${period}&format=${format}`;
         if (period === 'custom' && startDate && endDate) {
-            url += `&start_date=${startDate}&end_date=${endDate}`;
+            params.append('start_date', startDate);
+            params.append('end_date', endDate);
         }
 
-        // Create a temporary link to trigger download
+        showToast('info', 'Đang chuẩn bị file báo cáo...');
+
         const link = document.createElement('a');
-        link.href = url;
-        link.style.display = 'none';
+        link.href = `/api/data.php?${params.toString()}`;
+        link.setAttribute('download', `bao-cao-thong-ke.${format}`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        showToast('success', 'Báo cáo đã được tải xuống!');
+        setTimeout(() => showToast('success', 'Báo cáo đang được tải xuống'), 600);
     }
 </script>
 

@@ -24,16 +24,31 @@ include 'partials/navbar.php';
             <div class="lg:col-span-1">
                 <!-- Avatar Card -->
                 <div class="card text-center">
-                    <div
-                        class="w-32 h-32 mx-auto rounded-full bg-gradient-primary flex items-center justify-center text-white text-5xl shadow-xl mb-4">
-                        <i class="fas fa-user"></i>
+                    <div class="relative w-32 h-32 mx-auto mb-4">
+                        <img id="profileAvatarImg" src="" alt="Avatar" class="w-32 h-32 rounded-full shadow-xl object-cover hidden">
+                        <div id="profileAvatarFallback" class="w-32 h-32 rounded-full bg-gradient-primary flex items-center justify-center text-white text-4xl font-bold shadow-xl">
+                            <span>U</span>
+                        </div>
+                        <button type="button" id="changeAvatarBtn"
+                            class="absolute bottom-0 right-0 bg-white text-primary-600 border border-gray-200 rounded-full p-2 shadow-md"
+                            aria-label="Cập nhật ảnh đại diện">
+                            <i class="fas fa-camera"></i>
+                        </button>
                     </div>
-                    <h3 class="text-xl font-bold mb-1"><?php echo $_SESSION['user_name'] ?? 'User'; ?></h3>
-                    <p class="text-muted mb-4"><?php echo $_SESSION['user_email'] ?? 'user@example.com'; ?></p>
-                    <button class="btn btn-outline w-full mb-3">
-                        <i class="fas fa-camera mr-2"></i> Đổi ảnh đại diện
-                    </button>
-                    <button class="btn btn-outline w-full text-danger"
+                    <h3 class="text-xl font-bold mb-1" id="profileNameDisplay"><?php echo $_SESSION['user_name'] ?? 'User'; ?></h3>
+                    <p class="text-muted mb-1" id="profileEmailDisplay"><?php echo $_SESSION['user_email'] ?? 'user@example.com'; ?></p>
+                    <p class="text-sm text-muted" id="profilePhoneDisplay">Chưa cập nhật số điện thoại</p>
+                    <div class="mt-4 space-y-2 text-left">
+                        <div class="flex items-center text-sm text-muted">
+                            <i class="fas fa-map-marker-alt w-6"></i>
+                            <span id="profileAddressDisplay">Chưa có địa chỉ</span>
+                        </div>
+                        <div class="flex items-center text-sm text-muted">
+                            <i class="fas fa-birthday-cake w-6"></i>
+                            <span id="profileDobDisplay">Chưa cập nhật ngày sinh</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-outline w-full mt-6 text-danger"
                         onclick="if(confirm('Bạn có chắc muốn đăng xuất?')) window.location.href='logout.php'">
                         <i class="fas fa-sign-out-alt mr-2"></i> Đăng xuất
                     </button>
@@ -55,12 +70,24 @@ include 'partials/navbar.php';
                             <span class="font-bold text-lg" id="user-category-count">0</span>
                         </div>
                         <div class="flex justify-between items-center">
+                            <span class="text-muted">Tổng chi tiêu</span>
+                            <span class="font-bold text-lg text-danger" id="user-total-expense">0 đ</span>
+                        </div>
+                        <div class="flex justify-between items-center">
                             <span class="text-muted">Ngày tham gia</span>
                             <span class="font-bold text-sm" id="user-join-date">01/01/2024</span>
                         </div>
                         <div class="flex justify-between items-center">
                             <span class="text-muted">Trạng thái</span>
-                            <span class="badge badge-success">Hoạt động</span>
+                            <span class="badge badge-success" id="user-status-badge">Hoạt động</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-muted">Lần đăng nhập cuối</span>
+                            <span class="font-bold text-sm" id="user-last-login">--</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-muted">Tiền tệ mặc định</span>
+                            <span class="font-bold text-sm" id="user-default-currency">VND</span>
                         </div>
                     </div>
                 </div>
@@ -103,6 +130,47 @@ include 'partials/navbar.php';
                                 </label>
                                 <input type="tel" name="phone" class="form-control" placeholder="0123456789">
                             </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-map-marker-alt mr-1"></i> Địa chỉ
+                                </label>
+                                <input type="text" name="address" class="form-control" placeholder="Số nhà, đường, quận">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-birthday-cake mr-1"></i> Ngày sinh
+                                </label>
+                                <input type="date" name="date_of_birth" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-venus-mars mr-1"></i> Giới tính
+                                </label>
+                                <select name="gender" class="form-control">
+                                    <option value="MALE">Nam</option>
+                                    <option value="FEMALE">Nữ</option>
+                                    <option value="OTHER">Khác</option>
+                                    <option value="PREFER_NOT">Không tiết lộ</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-link mr-1"></i> Ảnh đại diện (URL)
+                            </label>
+                            <input type="url" name="avatar_url" id="avatarUrlInput" class="form-control" placeholder="https://example.com/avatar.jpg">
+                            <small class="text-muted">Hỗ trợ ảnh public URL. Sao chép đường dẫn ảnh và dán vào đây.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-align-left mr-1"></i> Giới thiệu ngắn
+                            </label>
+                            <textarea name="bio" class="form-control" rows="3" placeholder="Chia sẻ đôi chút về bạn"></textarea>
                         </div>
 
                         <div class="flex justify-end mt-6">
@@ -232,6 +300,8 @@ include 'partials/navbar.php';
 <script>
     $(document).ready(function () {
         loadUserStats();
+        loadProfile();
+        loadProfileSettings();
 
         // Update Profile
         $('#updateProfileForm').submit(function (e) {
@@ -239,6 +309,8 @@ include 'partials/navbar.php';
             $.post('/api/data.php', $(this).serialize(), function (res) {
                 if (res.success) {
                     showToast('success', res.message);
+                    loadProfile();
+                    loadUserStats();
                 } else {
                     showToast('error', res.message);
                 }
@@ -321,14 +393,40 @@ include 'partials/navbar.php';
                 }
             });
         });
+
+        $('#changeAvatarBtn').on('click', function () {
+            const $input = $('#avatarUrlInput');
+            if ($input.length) {
+                $input.focus();
+                $input[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+
+        $('#avatarUrlInput').on('input', function () {
+            updateAvatarPreview($(this).val(), $('[name="full_name"]').val());
+        });
     });
 
     function loadProfile() {
         $.get('/api/data.php?action=profile_get', function (res) {
             if (res.success && res.data) {
-                $('[name="full_name"]').val(res.data.full_name || '');
-                $('[name="email"]').val(res.data.email || '');
-                $('[name="phone"]').val(res.data.phone || '');
+                const data = res.data;
+                $('[name="full_name"]').val(data.full_name || '');
+                $('[name="email"]').val(data.email || '');
+                $('[name="phone"]').val(data.phone || '');
+                $('[name="address"]').val(data.address || '');
+                $('[name="date_of_birth"]').val(data.date_of_birth || '');
+                $('[name="gender"]').val((data.gender || 'OTHER').toUpperCase());
+                $('[name="bio"]').val(data.bio || '');
+                $('[name="avatar_url"]').val(data.avatar_url || '');
+
+                $('#profileNameDisplay').text(data.full_name || 'User');
+                $('#profileEmailDisplay').text(data.email || 'user@example.com');
+                $('#profilePhoneDisplay').text(data.phone || 'Chưa cập nhật số điện thoại');
+                $('#profileAddressDisplay').text(data.address || 'Chưa có địa chỉ');
+                $('#profileDobDisplay').text(data.date_of_birth ? formatDateReadable(data.date_of_birth) : 'Chưa cập nhật ngày sinh');
+
+                updateAvatarPreview(data.avatar_url, data.full_name);
             }
         });
     }
@@ -342,6 +440,70 @@ include 'partials/navbar.php';
                 $('#notify_push').prop('checked', !!res.data.notify_push);
             }
         });
+    }
+
+    function loadUserStats() {
+        $.get('/api/data.php?action=profile_overview', function (res) {
+            if (!res.success || !res.data) {
+                return;
+            }
+            const data = res.data;
+            $('#user-transaction-count').text(data.transactions ?? 0);
+            $('#user-category-count').text(data.categories ?? 0);
+            $('#user-total-expense').text(formatMoney(data.total_expense || 0));
+
+            if (data.joined_at) {
+                $('#user-join-date').text(formatDateReadable(data.joined_at));
+            }
+            $('#user-last-login').text(data.last_login_at ? formatDateTimeReadable(data.last_login_at) : 'Chưa xác định');
+            $('#user-default-currency').text((data.default_currency || 'VND').toUpperCase());
+
+            const status = (data.status || 'ACTIVE').toUpperCase();
+            const $badge = $('#user-status-badge');
+            $badge.removeClass('badge-success badge-warning badge-danger');
+            if (status === 'ACTIVE') {
+                $badge.addClass('badge-success').text('Hoạt động');
+            } else if (status === 'BANNED') {
+                $badge.addClass('badge-danger').text('Bị khóa');
+            } else {
+                $badge.addClass('badge-warning').text('Tạm ngưng');
+            }
+        });
+    }
+
+    function formatDateReadable(dateStr) {
+        const parsed = new Date(dateStr.replace(' ', 'T'));
+        if (isNaN(parsed.getTime())) {
+            return dateStr;
+        }
+        return parsed.toLocaleDateString('vi-VN');
+    }
+
+    function formatDateTimeReadable(value) {
+        const parsed = new Date(value.replace(' ', 'T'));
+        if (isNaN(parsed.getTime())) {
+            return value;
+        }
+        return parsed.toLocaleString('vi-VN');
+    }
+
+    function getInitials(name) {
+        if (!name) return 'U';
+        const parts = name.trim().split(/\s+/);
+        const initials = parts.slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('');
+        return initials || 'U';
+    }
+
+    function updateAvatarPreview(url, fullName) {
+        const $img = $('#profileAvatarImg');
+        const $fallback = $('#profileAvatarFallback');
+        if (url && /^https?:\/\//i.test(url)) {
+            $img.attr('src', url).removeClass('hidden');
+            $fallback.addClass('hidden');
+        } else {
+            $img.attr('src', '').addClass('hidden');
+            $fallback.removeClass('hidden').find('span').text(getInitials(fullName));
+        }
     }
 </script>
 

@@ -8,10 +8,58 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(100) NOT NULL UNIQUE,
     phone VARCHAR(20) DEFAULT NULL,
     avatar_url VARCHAR(500) DEFAULT NULL,
+    address VARCHAR(255) DEFAULT NULL,
+    date_of_birth DATE DEFAULT NULL,
+    gender ENUM('MALE','FEMALE','OTHER','PREFER_NOT') DEFAULT 'OTHER',
+    bio TEXT DEFAULT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('ADMIN', 'USER') NOT NULL DEFAULT 'USER',
+    role ENUM('SUPER_ADMIN','ADMIN','STAFF','USER') NOT NULL DEFAULT 'USER',
     status ENUM('ACTIVE','BANNED','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    last_login_at DATETIME DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Bang password_resets (yeu cau dat lai mat khau)
+CREATE TABLE IF NOT EXISTS password_resets (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    requested_ip VARCHAR(45) DEFAULT NULL,
+    requested_agent VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_password_resets_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    UNIQUE KEY uk_password_resets_token (token_hash),
+    INDEX idx_password_resets_user (user_id),
+    INDEX idx_password_resets_expiry (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Bang admin_logs (nhat ky hanh dong quan tri)
+CREATE TABLE IF NOT EXISTS admin_logs (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    admin_id INT UNSIGNED NULL,
+    action VARCHAR(100) NOT NULL,
+    description TEXT DEFAULT NULL,
+    target_type VARCHAR(100) DEFAULT NULL,
+    target_id INT UNSIGNED NULL,
+    meta JSON DEFAULT NULL,
+    ip_address VARCHAR(45) DEFAULT NULL,
+    user_agent VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_admin_logs_admin
+        FOREIGN KEY (admin_id) REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    INDEX idx_admin_logs_action (action),
+    INDEX idx_admin_logs_admin (admin_id),
+    INDEX idx_admin_logs_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Tạo bảng categories (danh mục chi tiêu/thu nhập của từng user)

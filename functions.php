@@ -40,4 +40,43 @@ function jsonResponse($success, $message, $data = [], $extra = [])
     echo json_encode($payload, JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+function logAdminAction($pdo, $adminId, $action, $description, $targetType = null, $targetId = null, array $metadata = [])
+{
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO admin_logs (admin_id, action, description, target_type, target_id, meta, ip_address, user_agent)
+            VALUES (:admin_id, :action, :description, :target_type, :target_id, :meta, :ip, :agent)
+        ");
+        $stmt->execute([
+            ':admin_id' => $adminId,
+            ':action' => $action,
+            ':description' => $description,
+            ':target_type' => $targetType,
+            ':target_id' => $targetId,
+            ':meta' => $metadata ? json_encode($metadata, JSON_UNESCAPED_UNICODE) : null,
+            ':ip' => $_SERVER['REMOTE_ADDR'] ?? null,
+            ':agent' => substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 250)
+        ]);
+    } catch (Throwable $e) {
+        error_log('admin log error: ' . $e->getMessage());
+    }
+}
+
+function createNotification(PDO $pdo, int $userId, string $type, string $title, string $message, ?string $linkUrl = null): void
+{
+    $allowedTypes = ['info', 'success', 'warning', 'error', 'reminder'];
+    if (!in_array($type, $allowedTypes, true)) {
+        $type = 'info';
+    }
+
+    $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, title, message, link_url) VALUES (:user_id, :type, :title, :message, :link)");
+    $stmt->execute([
+        ':user_id' => $userId,
+        ':type' => $type,
+        ':title' => $title,
+        ':message' => $message,
+        ':link' => $linkUrl ?: null
+    ]);
+}
 ?>

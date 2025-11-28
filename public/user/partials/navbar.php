@@ -27,10 +27,28 @@
                 <button id="theme-toggle" class="btn btn-ghost btn-icon theme-toggle" type="button" aria-label="Chuyen che do sang/toi">
                     <i class="fas fa-moon"></i>
                 </button>
-                <button class="relative p-2 hover:bg-gray-100 rounded-lg transition-colors btn-ghost btn-icon" type="button" aria-label="Xem thong bao">
-                    <i class="fas fa-bell text-gray-600 text-lg"></i>
-                    <span class="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full" aria-hidden="true"></span>
-                </button>
+                <div class="notification-menu relative">
+                    <button id="notifToggle" class="btn btn-ghost btn-icon" type="button" aria-label="Xem thong bao" aria-expanded="false">
+                        <i class="fas fa-bell text-gray-600 text-lg"></i>
+                        <span id="notif-badge" class="notif-count" aria-live="polite" aria-atomic="true" style="display:none;">0</span>
+                    </button>
+                    <div id="notifDropdown" class="notif-dropdown" aria-hidden="true">
+                        <div class="notif-dropdown-header">
+                            <div>
+                                <p class="font-semibold text-gray-900">Thông báo</p>
+                                <p class="text-xs text-muted">Cập nhật mới nhất</p>
+                            </div>
+                            <button type="button" class="notif-clear" id="notifMarkAllDropdown">
+                                <i class="fas fa-check-double mr-1"></i>
+                                Đánh dấu đã đọc
+                            </button>
+                        </div>
+                        <div id="notifDropdownList" class="notif-dropdown-list">
+                            <div class="notif-empty">Không có thông báo</div>
+                        </div>
+                        <a href="/public/user/notifications.php" class="notif-view-all">Xem tất cả</a>
+                    </div>
+                </div>
                 <div class="user-info cursor-pointer px-3 py-2 rounded-lg transition-colors" role="button" tabindex="0" aria-label="Tai khoan">
                     <div class="user-meta hidden md:block text-right">
                         <p class="text-sm font-semibold text-gray-900" title="<?php echo isset($_SESSION['user_name']) ? $_SESSION['user_name'] : 'User'; ?>">

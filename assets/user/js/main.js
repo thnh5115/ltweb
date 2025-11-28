@@ -57,6 +57,8 @@
             showToast('error', 'Có lỗi xảy ra: ' + error);
         }
     });
+
+    initNotificationDropdown();
 });
 
 function updateThemeIcon(isDark) {
@@ -119,4 +121,174 @@ function showToast(type, message) {
 
 function formatMoney(amount) {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+}
+
+function initNotificationDropdown() {
+    const $toggle = $('#notifToggle');
+    const $dropdown = $('#notifDropdown');
+    const $list = $('#notifDropdownList');
+    const $markAll = $('#notifMarkAllDropdown');
+
+    if (!$toggle.length || !$dropdown.length) {
+        return;
+    }
+
+    const closeDropdown = () => {
+        $dropdown.removeClass('open');
+        $dropdown.attr('aria-hidden', 'true');
+        $toggle.attr('aria-expanded', 'false');
+    };
+
+    const openDropdown = () => {
+        $dropdown.addClass('open');
+        $dropdown.attr('aria-hidden', 'false');
+        $toggle.attr('aria-expanded', 'true');
+        loadDropdownNotifications();
+    };
+
+    const loadBadge = () => {
+        $.get('/api/data.php?action=notifications_unread_count', function (res) {
+            if (res.success && res.data) {
+                refreshNotificationBadge(res.data.unread_count || 0);
+            }
+        });
+    };
+
+    const loadDropdownNotifications = () => {
+        $list.html('<div class="notif-empty">Đang tải thông báo...</div>');
+        $.get('/api/data.php', { action: 'notifications_list', limit: 5 }, function (res) {
+            if (!res.success) {
+                $list.html('<div class="notif-empty">Không thể tải thông báo</div>');
+                return;
+            }
+
+            const items = res.data || [];
+            if (!items.length) {
+                $list.html('<div class="notif-empty">Không có thông báo mới</div>');
+                return;
+            }
+
+            const html = items.map(item => createNotifItemHtml(item)).join('');
+            $list.html(html);
+        });
+    };
+
+    $toggle.on('click', function (e) {
+        e.preventDefault();
+        if ($dropdown.hasClass('open')) {
+            closeDropdown();
+        } else {
+            openDropdown();
+        }
+    });
+
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('.notification-menu').length) {
+            closeDropdown();
+        }
+    });
+
+    $markAll.on('click', function (e) {
+        e.preventDefault();
+        $.post('/api/data.php', { action: 'notifications_mark_all_read' }, function (res) {
+            if (res.success) {
+                showToast('success', 'Đã đánh dấu tất cả thông báo là đã đọc');
+                loadBadge();
+                loadDropdownNotifications();
+            } else {
+                showToast('error', res.message || 'Không thể cập nhật thông báo');
+            }
+        });
+    });
+
+    $(document).on('click', '.notif-dropdown .notif-item', function (e) {
+        e.preventDefault();
+        const id = $(this).data('id');
+        const link = $(this).data('link');
+        markNotificationAsRead(id, () => {
+            $(this).removeClass('unread');
+            loadBadge();
+            if (link) {
+                window.location.href = link;
+            }
+        });
+    });
+
+    loadBadge();
+}
+
+function markNotificationAsRead(id, callback) {
+    if (!id) {
+        if (typeof callback === 'function') callback();
+        return;
+    }
+    $.post('/api/data.php', { action: 'notifications_mark_read', id }, function (res) {
+        if (res.success) {
+            if (typeof callback === 'function') callback();
+        }
+    });
+}
+
+function refreshNotificationBadge(count) {
+    const $badge = $('#notif-badge');
+    if (!$badge.length) return;
+    if (count > 0) {
+        $badge.text(count > 99 ? '99+' : count);
+        $badge.show();
+    } else {
+        $badge.hide();
+    }
+}
+
+function createNotifItemHtml(item) {
+    const isUnread = Number(item.is_read) === 0;
+    const icon = getNotificationIcon(item.type);
+    const safeTitle = escapeHtml(item.title || 'Thông báo');
+    const safeMessage = escapeHtml(item.message || '');
+    const timestamp = formatNotificationTime(item.created_at);
+    const link = item.link_url ? escapeHtml(item.link_url) : '';
+
+    return `
+        <button type="button" class="notif-item ${isUnread ? 'unread' : ''}" data-id="${item.id}" data-link="${link}">
+            <div class="notif-icon"><i class="${icon}"></i></div>
+            <div class="notif-body">
+                <h4>${safeTitle}</h4>
+                <p>${safeMessage}</p>
+                <div class="notif-time"><i class="far fa-clock mr-1"></i>${timestamp}</div>
+            </div>
+        </button>
+    `;
+}
+
+function getNotificationIcon(type) {
+    const map = {
+        budget: 'fas fa-wallet',
+        bill: 'fas fa-file-invoice-dollar',
+        goal: 'fas fa-bullseye',
+        system: 'fas fa-info-circle',
+        success: 'fas fa-check-circle',
+        warning: 'fas fa-exclamation-circle',
+        error: 'fas fa-times-circle',
+        reminder: 'fas fa-bell'
+    };
+    return map[type] || 'fas fa-bell';
+}
+
+function formatNotificationTime(value) {
+    if (!value) return '';
+    const date = new Date(value.replace(' ', 'T'));
+    if (isNaN(date.getTime())) {
+        return value;
+    }
+    return date.toLocaleString('vi-VN', { hour12: false });
+}
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }

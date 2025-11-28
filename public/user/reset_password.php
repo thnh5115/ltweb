@@ -200,6 +200,7 @@ $token = $_GET['token'] ?? '';
                 $.ajax({
                     url: '/api/auth.php',
                     type: 'POST',
+                    dataType: 'json',
                     data: $(this).serialize(),
                     success: function (response) {
                         if (response.success) {

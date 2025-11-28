@@ -159,7 +159,11 @@ include 'partials/navbar.php';
     $(document).ready(function () {
         loadNotifications();
 
-        $('#applyFilters, #filterType, #filterStatus').on('change', function () {
+        $('#applyFilters').on('click', function () {
+            loadNotifications();
+        });
+
+        $('#filterType, #filterStatus, #filterDate').on('change', function () {
             loadNotifications();
         });
 
@@ -183,7 +187,9 @@ include 'partials/navbar.php';
     function loadNotifications() {
         const filters = {
             action: 'notifications_list',
-            unread_only: $('#filterStatus').val() === 'unread' ? 1 : 0
+            status: $('#filterStatus').val(),
+            type: $('#filterType').val(),
+            date: $('#filterDate').val()
         };
 
         $.get('/api/data.php', filters, function (response) {
@@ -198,7 +204,11 @@ include 'partials/navbar.php';
     function loadUnreadCount() {
         $.get('/api/data.php?action=notifications_unread_count', function (res) {
             if (res.success && res.data && typeof res.data.unread_count !== 'undefined') {
-                $('#notif-badge').text(res.data.unread_count);
+                if (typeof refreshNotificationBadge === 'function') {
+                    refreshNotificationBadge(res.data.unread_count);
+                } else {
+                    $('#notif-badge').text(res.data.unread_count);
+                }
             }
         });
     }

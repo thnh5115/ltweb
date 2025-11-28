@@ -109,12 +109,17 @@ if (isLoggedIn()) {
                 $.ajax({
                     url: '/api/auth.php',
                     type: 'POST',
+                    dataType: 'json',
                     data: $(this).serialize(),
                     success: function (response) {
                         if (response.success) {
                             $('#forgotPasswordForm').hide();
                             $('#successMessage').fadeIn();
                             showToast('success', response.message);
+                            if (response.data && response.data.token) {
+                                showToast('info', 'Token demo: ' + response.data.token);
+                                console.log('Password reset token (demo only):', response.data.token);
+                            }
                         } else {
                             showToast('error', response.message);
                         }

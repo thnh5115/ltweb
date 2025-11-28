@@ -19,9 +19,14 @@ include 'partials/navbar.php';
         </h2>
         <p class="text-muted">Quản lý tất cả người dùng trong hệ thống</p>
     </div>
-    <button class="btn btn-primary" onclick="openModal('addUserModal')">
-        <i class="fas fa-user-plus mr-2"></i> Thêm người dùng
-    </button>
+    <div class="flex gap-3">
+        <button class="btn btn-outline" onclick="openModal('broadcastModal')">
+            <i class="fas fa-bullhorn mr-2"></i> Gửi thông báo chung
+        </button>
+        <button class="btn btn-primary" onclick="openModal('addUserModal')">
+            <i class="fas fa-user-plus mr-2"></i> Thêm người dùng
+        </button>
+    </div>
 </div>
 
 <!-- Stats Overview -->
@@ -92,6 +97,7 @@ include 'partials/navbar.php';
                 <option value="">Tất cả trạng thái</option>
                 <option value="active">Hoạt động</option>
                 <option value="banned">Bị khóa</option>
+                <option value="inactive">Chưa kích hoạt</option>
             </select>
             <input type="date" id="filterDate" class="form-control" placeholder="Từ ngày">
             <button class="btn btn-primary" onclick="loadUsers()">
@@ -236,6 +242,52 @@ include 'partials/navbar.php';
     </div>
 </div>
 
+<!-- Broadcast Notification Modal -->
+<div id="broadcastModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">
+                <i class="fas fa-bullhorn mr-2 text-primary-600"></i>
+                Gửi thông báo đến người dùng
+            </h3>
+            <button class="modal-close" onclick="closeModal('broadcastModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="broadcastForm">
+                <div class="form-group">
+                    <label class="form-label">Loại thông báo</label>
+                    <select id="broadcastType" name="type" class="form-control">
+                        <option value="info">Thông tin</option>
+                        <option value="success">Thành công</option>
+                        <option value="warning">Cảnh báo</option>
+                        <option value="error">Lỗi</option>
+                        <option value="reminder">Nhắc nhở</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tiêu đề</label>
+                    <input type="text" id="broadcastTitle" name="title" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nội dung</label>
+                    <textarea id="broadcastMessage" name="message" class="form-control" rows="4" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Link đính kèm (tùy chọn)</label>
+                    <input type="url" id="broadcastLink" name="link_url" class="form-control" placeholder="https://...">
+                </div>
+                <p class="text-sm text-muted mb-4">
+                    Thông báo sẽ được gửi đến toàn bộ người dùng đang hoạt động.
+                </p>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeModal('broadcastModal')" class="btn btn-outline">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Gửi thông báo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     function escapeHtml(str) {
         if (str === null || str === undefined) return '';
@@ -252,6 +304,11 @@ include 'partials/navbar.php';
 
         $('#searchInput, #filterStatus').on('change keyup', function () {
             loadUsers();
+        });
+
+        $('#broadcastForm').on('submit', function (e) {
+            e.preventDefault();
+            sendBroadcastNotification();
         });
     });
 
@@ -303,9 +360,18 @@ include 'partials/navbar.php';
                 $('#showing-count').text(items.length);
 
                 items.forEach(u => {
-                    const statusBadge = (u.status || '').toUpperCase() === 'ACTIVE'
-                        ? '<span class="status-badge status-active"><i class="fas fa-check-circle mr-1"></i>Hoạt động</span>'
-                        : '<span class="status-badge status-banned"><i class="fas fa-ban mr-1"></i>Bị khóa</span>';
+                    const status = (u.status || '').toUpperCase();
+                    let statusBadge = '<span class="status-badge"><i class="fas fa-question mr-1"></i>Không xác định</span>';
+                    if (status === 'ACTIVE') {
+                        statusBadge = '<span class="status-badge status-active"><i class="fas fa-check-circle mr-1"></i>Hoạt động</span>';
+                    } else if (status === 'BANNED') {
+                        statusBadge = '<span class="status-badge status-banned"><i class="fas fa-ban mr-1"></i>Bị khóa</span>';
+                    } else if (status === 'INACTIVE') {
+                        statusBadge = '<span class="status-badge status-pending"><i class="fas fa-clock mr-1"></i>Chưa kích hoạt</span>';
+                    }
+
+                    const nextStatus = status === 'ACTIVE' ? 'BANNED' : 'ACTIVE';
+                    const toggleLabel = status === 'ACTIVE' ? 'Khóa' : 'Mở khóa';
 
                     const html = `
                     <tr class="transition-all">
@@ -333,7 +399,7 @@ include 'partials/navbar.php';
                                 <button class="btn btn-sm btn-outline" onclick="updateUserRole(${u.id}, '${u.role === 'ADMIN' ? 'USER' : 'ADMIN'}')" title="Đổi quyền">
                                     <i class="fas fa-user-shield"></i>
                                 </button>
-                                <button class="btn btn-sm btn-danger" onclick="updateUserStatus(${u.id}, '${(u.status || '').toUpperCase() === 'ACTIVE' ? 'BANNED' : 'ACTIVE'}')" title="Khóa/Mở">
+                                <button class="btn btn-sm btn-danger" onclick="updateUserStatus(${u.id}, '${nextStatus}')" title="${toggleLabel}">
                                     <i class="fas fa-ban"></i>
                                 </button>
                             </div>
@@ -369,6 +435,22 @@ include 'partials/navbar.php';
             } else {
                 alert(res.message || 'Không lấy được thông tin người dùng');
             }
+        }).fail(function () {
+            alert('Lỗi hệ thống');
+        });
+    }
+
+    function updateUserStatus(id, status) {
+        if (!id || !status) return;
+        const message = status === 'BANNED' ? 'Xác nhận khóa tài khoản này?' : 'Mở khóa tài khoản này?';
+        if (!confirm(message)) {
+            return;
+        }
+
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
             data: { action: 'admin_update_user_status', id, status }
         }).done(function (res) {
             if (res.success) {
@@ -395,6 +477,40 @@ include 'partials/navbar.php';
             }
         }).fail(function () {
             alert('Lỗi hệ thống');
+        });
+    }
+
+    function sendBroadcastNotification() {
+        const submitBtn = $('#broadcastForm button[type="submit"]');
+        submitBtn.prop('disabled', true).text('Đang gửi...');
+
+        const payload = {
+            action: 'admin_send_notification',
+            scope: 'all',
+            type: $('#broadcastType').val(),
+            title: $('#broadcastTitle').val(),
+            message: $('#broadcastMessage').val(),
+            link_url: $('#broadcastLink').val()
+        };
+
+        $.ajax({
+            url: '/api/admin_data.php',
+            method: 'POST',
+            dataType: 'json',
+            data: payload
+        }).done(function (res) {
+            if (res.success) {
+                const count = res.data && res.data.recipients ? res.data.recipients : 0;
+                alert(`Đã gửi thông báo tới ${count} người dùng`);
+                $('#broadcastForm')[0].reset();
+                closeModal('broadcastModal');
+            } else {
+                alert(res.message || 'Không thể gửi thông báo');
+            }
+        }).fail(function () {
+            alert('Lỗi hệ thống khi gửi thông báo');
+        }).always(function () {
+            submitBtn.prop('disabled', false).text('Gửi thông báo');
         });
     }
 

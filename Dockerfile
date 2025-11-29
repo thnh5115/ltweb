@@ -20,11 +20,10 @@ WORKDIR /var/www/html
 # Copy toàn bộ source code vào container
 COPY . /var/www/html
 
-# (Optional) Nếu cần chỉnh DocumentRoot, có thể dùng APACHE_DOCUMENT_ROOT:
-# ENV APACHE_DOCUMENT_ROOT=/var/www/html
-# RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
-#     /etc/apache2/sites-available/000-default.conf \
-#     /etc/apache2/sites-available/default-ssl.conf
+# Set DocumentRoot to /var/www/html/public
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
 # Phân quyền (chủ yếu cho upload / cache nếu bạn dùng)
 RUN chown -R www-data:www-data /var/www/html

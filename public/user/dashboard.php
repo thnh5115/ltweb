@@ -77,12 +77,13 @@ include 'partials/navbar.php';
                             <i class="fas fa-chart-line mr-2 text-primary-600"></i>
                             Biểu đồ thu chi
                         </h3>
-                        <select class="form-control"
+                        <select id="dashboardChartPeriod" class="form-control"
                             style="width: auto; padding: 0.5rem 1rem; font-size: var(--text-sm);">
-                            <option>Tháng này</option>
-                            <option>Tháng trước</option>
-                            <option>3 tháng</option>
-                            <option>6 tháng</option>
+                            <option value="this_month">Tháng này</option>
+                            <option value="last_month">Tháng trước</option>
+                            <option value="3_months">3 tháng</option>
+                            <option value="6_months">6 tháng</option>
+                            <option value="12_months">12 tháng</option>
                         </select>
                     </div>
                     <div style="height: 320px; padding: var(--space-4);">
@@ -187,8 +188,22 @@ include 'partials/navbar.php';
 </style>
 
 <script>
+    let overviewLineChartInstance = null;
+    let overviewPieChartInstance = null;
+    let dashboardChartPeriod = 'this_month';
+
     $(document).ready(function () {
+        const $chartPeriodSelect = $('#dashboardChartPeriod');
+        if ($chartPeriodSelect.length) {
+            dashboardChartPeriod = $chartPeriodSelect.val() || 'this_month';
+            $chartPeriodSelect.on('change', function () {
+                dashboardChartPeriod = $(this).val();
+                loadDashboardCharts(dashboardChartPeriod);
+            });
+        }
+
         loadDashboardData();
+        loadDashboardCharts(dashboardChartPeriod);
     });
 
     function loadDashboardData() {
@@ -248,181 +263,226 @@ include 'partials/navbar.php';
                 });
             }
         });
+    }
 
-        // Load Charts
-        $.get('/api/data.php?action=chart_data', function (res) {
+    function loadDashboardCharts(period = 'this_month') {
+        const params = $.param({ action: 'chart_data', period });
+        $.get(`/api/data.php?${params}`, function (res) {
             if (res.success) {
-                renderCharts(res.data);
+                renderDashboardCharts(res.data);
             }
         });
     }
 
-    function renderCharts(data) {
+    function renderDashboardCharts(data) {
         // Pie Chart - Updated colors to match design system
-        const pieCtx = document.getElementById('categoryPieChart').getContext('2d');
-        const pieLabels = Object.keys(data.pie);
-        const pieData = pieLabels.map(k => data.pie[k].amount);
-        const pieColors = pieLabels.map(k => data.pie[k].color);
+        const pieCanvas = document.getElementById('categoryPieChart');
+        if (pieCanvas) {
+            const pieCtx = pieCanvas.getContext('2d');
+            const pieLabels = Object.keys(data.pie);
+            const pieData = pieLabels.map(k => data.pie[k].amount);
+            const pieColors = pieLabels.map(k => data.pie[k].color);
 
-        new Chart(pieCtx, {
-            type: 'doughnut',
-            data: {
-                labels: pieLabels,
-                datasets: [{
-                    data: pieData,
-                    backgroundColor: pieColors,
-                    borderWidth: 3,
-                    borderColor: '#fff',
-                    hoverBorderWidth: 4,
-                    hoverOffset: 10
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            padding: 15,
-                            font: {
-                                family: 'Inter',
-                                size: 12,
-                                weight: '500'
+            if (overviewPieChartInstance) {
+                overviewPieChartInstance.destroy();
+            }
+
+            overviewPieChartInstance = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: pieLabels,
+                    datasets: [{
+                        data: pieData,
+                        backgroundColor: pieColors,
+                        borderWidth: 3,
+                        borderColor: '#fff',
+                        hoverBorderWidth: 4,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: {
+                                    family: 'Inter',
+                                    size: 12,
+                                    weight: '500'
+                                },
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            cornerRadius: 8,
+                            titleFont: {
+                                size: 14,
+                                weight: 'bold'
                             },
-                            usePointStyle: true,
-                            pointStyle: 'circle'
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        padding: 12,
-                        cornerRadius: 8,
-                        titleFont: {
-                            size: 14,
-                            weight: 'bold'
-                        },
-                        bodyFont: {
-                            size: 13
-                        },
-                        callbacks: {
-                            label: function (context) {
-                                return context.label + ': ' + formatMoney(context.parsed);
+                            bodyFont: {
+                                size: 13
+                            },
+                            callbacks: {
+                                label: function (context) {
+                                    return context.label + ': ' + formatMoney(context.parsed);
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
 
-        // Line Chart - Updated colors to match design system
-        const lineCtx = document.getElementById('expenseLineChart').getContext('2d');
-        new Chart(lineCtx, {
+        // Area Line Chart styled like mockup
+        overviewLineChartInstance = createAreaLineChart('expenseLineChart', data.line.labels, [
+            {
+                label: 'Thu nhập',
+                data: data.line.income,
+                color: '#10B981'
+            },
+            {
+                label: 'Chi tiêu',
+                data: data.line.expense,
+                color: '#EF4444'
+            }
+        ], { legendPosition: 'top' });
+    }
+
+    function createAreaLineChart(canvasId, labels, series, options = {}) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return null;
+
+        if (overviewLineChartInstance) {
+            overviewLineChartInstance.destroy();
+        }
+
+        const datasets = series.map(cfg => buildAreaDataset(cfg));
+
+        return new Chart(canvas.getContext('2d'), {
             type: 'line',
-            data: {
-                labels: data.line.labels,
-                datasets: [
-                    {
-                        label: 'Thu nhập',
-                        data: data.line.income,
-                        borderColor: '#10B981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        fill: true,
-                        pointRadius: 5,
-                        pointHoverRadius: 7,
-                        pointBackgroundColor: '#10B981',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2
-                    },
-                    {
-                        label: 'Chi tiêu',
-                        data: data.line.expense,
-                        borderColor: '#EF4444',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        fill: true,
-                        pointRadius: 5,
-                        pointHoverRadius: 7,
-                        pointBackgroundColor: '#EF4444',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2
+            data: { labels, datasets },
+            options: getAreaChartOptions(options)
+        });
+    }
+
+    function buildAreaDataset(config) {
+        return {
+            label: config.label,
+            data: config.data,
+            borderColor: config.color,
+            pointBackgroundColor: config.color,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            borderWidth: 3,
+            cubicInterpolationMode: 'monotone',
+            tension: 0.45,
+            fill: true,
+            pointRadius: ctx => getPointRadius(ctx),
+            pointHoverRadius: 7,
+            backgroundColor: ctx => buildGradientBackground(ctx, config.color)
+        };
+    }
+
+    function getAreaChartOptions(extra = {}) {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: extra.legendPosition || 'start',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 20,
+                        font: {
+                            family: 'Inter',
+                            size: 13,
+                            weight: '600'
+                        }
                     }
-                ]
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    padding: 12,
+                    cornerRadius: 10,
+                    callbacks: {
+                        label: context => `${context.dataset.label}: ${formatMoney(context.parsed.y)}`
+                    }
+                }
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: {
-                            padding: 15,
-                            font: {
-                                family: 'Inter',
-                                size: 13,
-                                weight: '600'
-                            },
-                            usePointStyle: true,
-                            pointStyle: 'circle'
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        padding: 12,
-                        cornerRadius: 8,
-                        titleFont: {
-                            size: 14,
-                            weight: 'bold'
-                        },
-                        bodyFont: {
-                            size: 13
-                        },
-                        callbacks: {
-                            label: function (context) {
-                                return context.dataset.label + ': ' + formatMoney(context.parsed.y);
-                            }
-                        }
+            scales: {
+                x: {
+                    grid: { display: false, drawBorder: false },
+                    ticks: {
+                        color: 'var(--gray-500)',
+                        font: { family: 'Inter', size: 12 }
                     }
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.05)',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            font: {
-                                family: 'JetBrains Mono',
-                                size: 11
-                            },
-                            callback: function (value) {
-                                return formatMoney(value);
-                            }
-                        }
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.2)',
+                        drawBorder: false,
+                        drawTicks: false
                     },
-                    x: {
-                        grid: {
-                            display: false,
-                            drawBorder: false
-                        },
-                        ticks: {
-                            font: {
-                                family: 'Inter',
-                                size: 12
-                            }
-                        }
+                    ticks: {
+                        color: 'var(--gray-500)',
+                        font: { family: 'JetBrains Mono', size: 11 },
+                        callback: value => formatCompactCurrency(value)
                     }
                 }
             }
-        });
+        };
+    }
+
+    function getPointRadius(ctx) {
+        const value = ctx.raw || 0;
+        if (value <= 0) return 0;
+        const lastIndex = ctx.dataset.data.length - 1;
+        return ctx.dataIndex === lastIndex ? 6 : 3;
+    }
+
+    function buildGradientBackground(ctx, color) {
+        const chart = ctx.chart;
+        const { ctx: canvasCtx, chartArea } = chart;
+        if (!chartArea) {
+            return hexToRgba(color, 0.15);
+        }
+        const gradient = canvasCtx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+        gradient.addColorStop(0, hexToRgba(color, 0));
+        gradient.addColorStop(1, hexToRgba(color, 0.35));
+        return gradient;
+    }
+
+    function hexToRgba(hex, alpha) {
+        const sanitized = hex.replace('#', '');
+        const bigint = parseInt(sanitized.length === 3 ? sanitized.repeat(2) : sanitized, 16);
+        const r = (bigint >> 16) & 255;
+        const g = (bigint >> 8) & 255;
+        const b = bigint & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function formatCompactCurrency(value) {
+        const absVal = Math.abs(value);
+        if (absVal >= 1_000_000_000) {
+            return (value / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
+        }
+        if (absVal >= 1_000_000) {
+            return (value / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+        }
+        if (absVal >= 1_000) {
+            return (value / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+        }
+        return value.toString();
     }
 </script>
 

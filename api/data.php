@@ -2485,31 +2485,7 @@ function handleStatisticsSummary($pdo, $userId)
             $dateFrom = $startDate;
             $dateTo = $endDate;
         } else {
-            switch ($period) {
-                case 'this_month':
-                    $dateFrom = date('Y-m-01');
-                    $dateTo = date('Y-m-t');
-                    break;
-                case 'last_month':
-                    $dateFrom = date('Y-m-01', strtotime('last month'));
-                    $dateTo = date('Y-m-t', strtotime('last month'));
-                    break;
-                case '3_months':
-                    $dateFrom = date('Y-m-d', strtotime('-3 months'));
-                    $dateTo = date('Y-m-d');
-                    break;
-                case '6_months':
-                    $dateFrom = date('Y-m-d', strtotime('-6 months'));
-                    $dateTo = date('Y-m-d');
-                    break;
-                case 'this_year':
-                    $dateFrom = date('Y-01-01');
-                    $dateTo = date('Y-12-31');
-                    break;
-                default:
-                    $dateFrom = date('Y-m-01');
-                    $dateTo = date('Y-m-t');
-            }
+            [$dateFrom, $dateTo] = getDateRangeByPeriod($period);
         }
 
         // Get current period stats
@@ -2600,6 +2576,7 @@ function handleStatisticsCharts($pdo, $userId)
         $period = $_GET['period'] ?? 'this_month';
         $startDate = $_GET['start_date'] ?? null;
         $endDate = $_GET['end_date'] ?? null;
+        $interval = $_GET['interval'] ?? 'auto';
 
         // Calculate date range based on period or custom dates
         if ($period === 'custom' && $startDate && $endDate) {
@@ -2633,34 +2610,12 @@ function handleStatisticsCharts($pdo, $userId)
             }
         }
 
-        // Time series data (line chart)
-        $timeStmt = $pdo->prepare("
-            SELECT 
-                DATE(transaction_date) as date,
-                SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
-                SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
-            FROM transactions
-            WHERE user_id = :user_id 
-              AND transaction_date BETWEEN :date_from AND :date_to
-            GROUP BY DATE(transaction_date)
-            ORDER BY DATE(transaction_date) ASC
-        ");
-        $timeStmt->execute([
-            ':user_id' => $userId,
-            ':date_from' => $dateFrom,
-            ':date_to' => $dateTo
-        ]);
-        $timeData = $timeStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $timeLabels = [];
-        $timeIncome = [];
-        $timeExpense = [];
-
-        foreach ($timeData as $row) {
-            $timeLabels[] = date('d/m', strtotime($row['date']));
-            $timeIncome[] = (float) $row['income'];
-            $timeExpense[] = (float) $row['expense'];
-        }
+        $startDateObj = new DateTime($dateFrom);
+        $endDateObj = new DateTime($dateTo);
+        $timeSeries = generateTimeSeries($pdo, $userId, $startDateObj, $endDateObj, $interval);
+        $timeLabels = $timeSeries['labels'];
+        $timeIncome = $timeSeries['income'];
+        $timeExpense = $timeSeries['expense'];
 
         // Category distribution (pie chart)
         $catStmt = $pdo->prepare("
@@ -2772,7 +2727,8 @@ function handleStatisticsCharts($pdo, $userId)
             'time' => [
                 'labels' => $timeLabels,
                 'income' => $timeIncome,
-                'expense' => $timeExpense
+                'expense' => $timeExpense,
+                'interval' => $timeSeries['interval']
             ],
             'categories' => [
                 'labels' => $catLabels,
@@ -2961,18 +2917,253 @@ function handleRecentTransactions($pdo, $userId)
     }
 }
 
+// ============================================
+// SHARED TIME-SERIES HELPERS
+// ============================================
+
+function getDateRangeByPeriod(string $period, ?string $customStart = null, ?string $customEnd = null): array
+{
+    $period = strtolower($period);
+    $today = new DateTime('today');
+
+    switch ($period) {
+        case 'last_month':
+            $start = new DateTime('first day of last month');
+            $end = new DateTime('last day of last month');
+            break;
+        case '3_months':
+            $start = (new DateTime('first day of this month'))->modify('-2 months');
+            $end = clone $today;
+            break;
+        case '6_months':
+            $start = (new DateTime('first day of this month'))->modify('-5 months');
+            $end = clone $today;
+            break;
+        case '12_months':
+            $start = (new DateTime('first day of this month'))->modify('-11 months');
+            $end = clone $today;
+            break;
+        case 'this_year':
+            $start = new DateTime('first day of January');
+            $end = clone $today;
+            break;
+        case 'custom':
+            if ($customStart && $customEnd) {
+                $start = new DateTime($customStart);
+                $end = new DateTime($customEnd);
+                break;
+            }
+            // fall through to default when custom dates missing
+        case 'this_month':
+            $start = new DateTime('first day of this month');
+            $monthEnd = new DateTime('last day of this month');
+            $end = $today < $monthEnd ? clone $today : $monthEnd;
+            break;
+        default:
+            $start = new DateTime('first day of this month');
+            $end = clone $today;
+    }
+
+    if ($end < $start) {
+        $end = clone $start;
+    }
+
+    return [$start->format('Y-m-d'), $end->format('Y-m-d')];
+}
+
+function generateTimeSeries(PDO $pdo, int $userId, DateTime $startDate, DateTime $endDate, string $intervalPreference = 'auto'): array
+{
+    if ($startDate > $endDate) {
+        $tmp = clone $startDate;
+        $startDate = clone $endDate;
+        $endDate = $tmp;
+    }
+
+    $valid = ['auto', 'day', 'week', 'month'];
+    if (!in_array($intervalPreference, $valid, true)) {
+        $intervalPreference = 'auto';
+    }
+
+    $dayDiff = max(0, $startDate->diff($endDate)->days);
+    if ($intervalPreference === 'auto') {
+        $resolvedInterval = $dayDiff > 90 ? 'month' : 'day';
+    } else {
+        $resolvedInterval = $intervalPreference;
+    }
+
+    switch ($resolvedInterval) {
+        case 'month':
+            return generateMonthlySeries($pdo, $userId, $startDate, $endDate);
+        case 'week':
+            return generateWeeklySeries($pdo, $userId, $startDate, $endDate);
+        default:
+            return generateDailySeries($pdo, $userId, $startDate, $endDate);
+    }
+}
+
+function generateDailySeries(PDO $pdo, int $userId, DateTime $startDate, DateTime $endDate): array
+{
+    $stmt = $pdo->prepare("
+        SELECT 
+            DATE(transaction_date) as bucket,
+            SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+            SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+        FROM transactions
+        WHERE user_id = :user_id
+          AND transaction_date BETWEEN :start_date AND :end_date
+        GROUP BY DATE(transaction_date)
+        ORDER BY DATE(transaction_date) ASC
+    ");
+    $stmt->execute([
+        ':user_id' => $userId,
+        ':start_date' => $startDate->format('Y-m-d'),
+        ':end_date' => $endDate->format('Y-m-d')
+    ]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $map = [];
+    foreach ($rows as $row) {
+        $map[$row['bucket']] = [
+            'income' => (float) $row['income'],
+            'expense' => (float) $row['expense']
+        ];
+    }
+
+    $labels = [];
+    $income = [];
+    $expense = [];
+    $period = new DatePeriod(clone $startDate, new DateInterval('P1D'), (clone $endDate)->modify('+1 day'));
+    foreach ($period as $date) {
+        $key = $date->format('Y-m-d');
+        $labels[] = $date->format('d/m');
+        $income[] = $map[$key]['income'] ?? 0;
+        $expense[] = $map[$key]['expense'] ?? 0;
+    }
+
+    return [
+        'labels' => $labels,
+        'income' => $income,
+        'expense' => $expense,
+        'interval' => 'day'
+    ];
+}
+
+function generateWeeklySeries(PDO $pdo, int $userId, DateTime $startDate, DateTime $endDate): array
+{
+    $stmt = $pdo->prepare("
+        SELECT 
+            DATE_FORMAT(transaction_date, '%x-%v') as bucket,
+            SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+            SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+        FROM transactions
+        WHERE user_id = :user_id
+          AND transaction_date BETWEEN :start_date AND :end_date
+        GROUP BY DATE_FORMAT(transaction_date, '%x-%v')
+        ORDER BY bucket ASC
+    ");
+    $stmt->execute([
+        ':user_id' => $userId,
+        ':start_date' => $startDate->format('Y-m-d'),
+        ':end_date' => $endDate->format('Y-m-d')
+    ]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $map = [];
+    foreach ($rows as $row) {
+        $map[$row['bucket']] = [
+            'income' => (float) $row['income'],
+            'expense' => (float) $row['expense']
+        ];
+    }
+
+    $labels = [];
+    $income = [];
+    $expense = [];
+    $cursor = clone $startDate;
+    while ($cursor <= $endDate) {
+        $key = sprintf('%s-%s', $cursor->format('o'), str_pad($cursor->format('W'), 2, '0', STR_PAD_LEFT));
+        $labels[] = 'Tuần ' . (int) $cursor->format('W');
+        $income[] = $map[$key]['income'] ?? 0;
+        $expense[] = $map[$key]['expense'] ?? 0;
+        $cursor->modify('+1 week');
+    }
+
+    return [
+        'labels' => $labels,
+        'income' => $income,
+        'expense' => $expense,
+        'interval' => 'week'
+    ];
+}
+
+function generateMonthlySeries(PDO $pdo, int $userId, DateTime $startDate, DateTime $endDate): array
+{
+    $stmt = $pdo->prepare("
+        SELECT 
+            DATE_FORMAT(transaction_date, '%Y-%m') as bucket,
+            SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+            SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+        FROM transactions
+        WHERE user_id = :user_id
+          AND transaction_date BETWEEN :start_date AND :end_date
+        GROUP BY DATE_FORMAT(transaction_date, '%Y-%m')
+        ORDER BY bucket ASC
+    ");
+    $stmt->execute([
+        ':user_id' => $userId,
+        ':start_date' => $startDate->format('Y-m-d'),
+        ':end_date' => $endDate->format('Y-m-d')
+    ]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $map = [];
+    foreach ($rows as $row) {
+        $map[$row['bucket']] = [
+            'income' => (float) $row['income'],
+            'expense' => (float) $row['expense']
+        ];
+    }
+
+    $labels = [];
+    $income = [];
+    $expense = [];
+    $cursor = (clone $startDate)->modify('first day of this month');
+    $endCursor = (clone $endDate)->modify('first day of next month');
+    while ($cursor < $endCursor) {
+        $key = $cursor->format('Y-m');
+        $labels[] = 'T' . (int) $cursor->format('n');
+        $income[] = $map[$key]['income'] ?? 0;
+        $expense[] = $map[$key]['expense'] ?? 0;
+        $cursor->modify('+1 month');
+    }
+
+    return [
+        'labels' => $labels,
+        'income' => $income,
+        'expense' => $expense,
+        'interval' => 'month'
+    ];
+}
+
 function handleChartData($pdo, $userId)
 {
     try {
-        // Pie Chart Data
+        $period = $_GET['period'] ?? 'this_month';
+        [$dateFrom, $dateTo] = getDateRangeByPeriod($period);
+        $startDate = new DateTime($dateFrom);
+        $endDate = new DateTime($dateTo);
+
+        // Pie Chart Data scoped to selected range
         $pieStmt = $pdo->prepare("
             SELECT c.name, c.color, SUM(t.amount) as amount
             FROM transactions t
             INNER JOIN categories c ON t.category_id = c.id
             WHERE t.user_id = :user_id AND t.type = 'EXPENSE'
+              AND t.transaction_date BETWEEN :date_from AND :date_to
             GROUP BY c.id, c.name, c.color
         ");
-        $pieStmt->execute([':user_id' => $userId]);
+        $pieStmt->execute([
+            ':user_id' => $userId,
+            ':date_from' => $dateFrom,
+            ':date_to' => $dateTo
+        ]);
         $pieData = $pieStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $expenseByCategory = [];
@@ -2983,37 +3174,16 @@ function handleChartData($pdo, $userId)
             ];
         }
 
-        // Line Chart Data - Last 30 days
-        $lineStmt = $pdo->prepare("
-            SELECT 
-                DATE(t.transaction_date) as date,
-                SUM(CASE WHEN t.type = 'INCOME' THEN t.amount ELSE 0 END) as income,
-                SUM(CASE WHEN t.type = 'EXPENSE' THEN t.amount ELSE 0 END) as expense
-            FROM transactions t
-            WHERE t.user_id = :user_id 
-              AND t.transaction_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-            GROUP BY DATE(t.transaction_date)
-            ORDER BY DATE(t.transaction_date) ASC
-        ");
-        $lineStmt->execute([':user_id' => $userId]);
-        $lineData = $lineStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $labels = [];
-        $income = [];
-        $expense = [];
-
-        foreach ($lineData as $row) {
-            $labels[] = date('d/m', strtotime($row['date']));
-            $income[] = (float) $row['income'];
-            $expense[] = (float) $row['expense'];
-        }
+        $intervalPreference = $period === '12_months' ? 'month' : 'auto';
+        $lineSeries = generateTimeSeries($pdo, $userId, $startDate, $endDate, $intervalPreference);
 
         jsonResponse(true, 'Success', [
             'pie' => $expenseByCategory,
             'line' => [
-                'labels' => $labels,
-                'income' => $income,
-                'expense' => $expense
+                'labels' => $lineSeries['labels'],
+                'income' => $lineSeries['income'],
+                'expense' => $lineSeries['expense'],
+                'interval' => $lineSeries['interval']
             ]
         ]);
 

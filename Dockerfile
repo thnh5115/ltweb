@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install gd pdo pdo_mysql mysqli
 
+# Tạo thư mục socket cho MariaDB và set quyền
+RUN mkdir -p /run/mysqld && chown -R mysql:mysql /run/mysqld /var/lib/mysql
+
 # Bật mod_rewrite cho Apache
 RUN a2enmod rewrite
 

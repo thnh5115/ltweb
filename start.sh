@@ -10,7 +10,11 @@ if [ ! -d "/var/lib/mysql/mysql" ]; then
 fi
 
 echo "👉 Starting MariaDB (mysqld)..."
-mysqld --user=mysql --datadir=/var/lib/mysql --skip-networking=0 --bind-address=127.0.0.1 &
+mysqld --user=mysql \
+  --datadir=/var/lib/mysql \
+  --socket=/run/mysqld/mysqld.sock \
+  --skip-networking=0 \
+  --bind-address=127.0.0.1 &
 
 # Đợi MariaDB sẵn sàng
 until mysqladmin ping -h "127.0.0.1" --silent; do

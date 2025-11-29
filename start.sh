@@ -1,40 +1,46 @@
 #!/bin/bash
 set -e
 
-echo "👉 Starting MySQL..."
+echo "👉 Initializing MariaDB data directory if needed..."
 
-# Start MySQL service
-service mysql start
+# Nếu chưa có thư mục hệ thống của MySQL/MariaDB thì init
+if [ ! -d "/var/lib/mysql/mysql" ]; then
+  echo "📦 Running mariadb-install-db..."
+  mariadb-install-db --user=mysql --datadir=/var/lib/mysql > /dev/null
+fi
 
-# Đợi MySQL lên
+echo "👉 Starting MariaDB (mysqld)..."
+mysqld --user=mysql --datadir=/var/lib/mysql --skip-networking=0 --bind-address=127.0.0.1 &
+
+# Đợi MariaDB sẵn sàng
 until mysqladmin ping -h "127.0.0.1" --silent; do
-  echo "⏳ Waiting for MySQL..."
+  echo "⏳ Waiting for MariaDB to be ready..."
   sleep 2
 done
 
-echo "✅ MySQL is up. Initializing database..."
+echo "✅ MariaDB is up. Initializing database & user..."
 
-# Tạo DB nếu chưa có
-mysql -uroot -e "CREATE DATABASE IF NOT EXISTS expense_manager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-
-# Tạo user app nếu chưa có
+# Tạo DB và user (idempotent)
 mysql -uroot <<EOSQL
+CREATE DATABASE IF NOT EXISTS expense_manager
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
 CREATE USER IF NOT EXISTS 'user'@'localhost' IDENTIFIED BY 'password';
 GRANT ALL PRIVILEGES ON expense_manager.* TO 'user'@'localhost';
 FLUSH PRIVILEGES;
 EOSQL
 
-# Nếu bảng users chưa tồn tại thì chạy schema + seeds (lần đầu)
+# Nếu bảng users chưa tồn tại => import schema + seeds (chỉ lần đầu)
 if ! mysql -uroot -Dexpense_manager -e "SHOW TABLES LIKE 'users';" | grep -q users; then
-  echo "📦 Importing schema.sql..."
-  mysql -uroot expense_manager < /var/www/html/db/schema.sql
+  echo "📥 Importing db/schema.sql..."
+  mysql -uroot expense_manager < /var/www/html/db/schema.sql || echo "⚠️ schema.sql import failed"
 
-  echo "📦 Importing seeds.sql..."
-  mysql -uroot expense_manager < /var/www/html/db/seeds.sql
+  echo "📥 Importing db/seeds.sql..."
+  mysql -uroot expense_manager < /var/www/html/db/seeds.sql || echo "⚠️ seeds.sql import failed"
 else
-  echo "ℹ️ Database already initialized, skipping schema/seeds."
+  echo "ℹ️ Database already initialized, skipping schema & seeds."
 fi
 
 echo "🚀 Starting Apache..."
-# Chạy Apache ở foreground để container không tắt
-apache2-foreground
+exec apache2-foreground

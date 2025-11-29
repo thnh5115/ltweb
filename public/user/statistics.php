@@ -104,9 +104,9 @@ include 'partials/navbar.php';
                         Thu chi theo thời gian
                     </h3>
                     <div class="chart-controls">
-                        <button class="btn btn-sm btn-outline">Ngày</button>
-                        <button class="btn btn-sm btn-outline">Tuần</button>
-                        <button class="btn btn-sm btn-outline active">Tháng</button>
+                        <button class="btn btn-sm btn-outline chart-interval-btn active" data-interval="day">Ngày</button>
+                        <button class="btn btn-sm btn-outline chart-interval-btn" data-interval="week">Tuần</button>
+                        <button class="btn btn-sm btn-outline chart-interval-btn" data-interval="month">Tháng</button>
                     </div>
                 </div>
                 <div style="height: 320px; padding: var(--space-4);">
@@ -190,6 +190,9 @@ include 'partials/navbar.php';
 </div>
 
 <script>
+    let statisticsTimeChartInstance = null;
+    let statsInterval = 'day';
+
     $(document).ready(function () {
         loadStatistics();
 
@@ -201,15 +204,34 @@ include 'partials/navbar.php';
                 loadStatistics();
             }
         });
+
+        $('#startDate, #endDate').on('change', function () {
+            if ($('#periodSelect').val() === 'custom' && $('#startDate').val() && $('#endDate').val()) {
+                loadStatistics();
+            }
+        });
+
+        $('.chart-interval-btn').on('click', function () {
+            if ($(this).hasClass('active')) return;
+            $('.chart-interval-btn').removeClass('active');
+            $(this).addClass('active');
+            statsInterval = $(this).data('interval') || 'day';
+            loadStatistics();
+        });
     });
 
     function loadStatistics() {
         const period = $('#periodSelect').val();
         const startDate = $('#startDate').val();
         const endDate = $('#endDate').val();
+        const isCustomRange = period === 'custom';
+
+        if (isCustomRange && (!startDate || !endDate)) {
+            return;
+        }
 
         let urlParams = 'period=' + period;
-        if (period === 'custom' && startDate && endDate) {
+        if (isCustomRange) {
             urlParams += '&start_date=' + startDate + '&end_date=' + endDate;
         }
 
@@ -226,7 +248,8 @@ include 'partials/navbar.php';
         });
 
         // Load Charts
-        $.get('/api/data.php?action=statistics_charts&' + urlParams, function (res) {
+        const chartParams = urlParams + '&interval=' + statsInterval;
+        $.get('/api/data.php?action=statistics_charts&' + chartParams, function (res) {
             if (res.success) {
                 renderCharts(res.data);
             }
@@ -288,42 +311,16 @@ include 'partials/navbar.php';
     }
 
     function renderCharts(data) {
-        // Time Chart
-        new Chart(document.getElementById('timeChart'), {
+        if (statisticsTimeChartInstance) {
+            statisticsTimeChartInstance.destroy();
+        }
+        statisticsTimeChartInstance = new Chart(document.getElementById('timeChart').getContext('2d'), {
             type: 'line',
             data: {
                 labels: data.time.labels,
-                datasets: [
-                    {
-                        label: 'Thu nhập',
-                        data: data.time.income,
-                        borderColor: '#10B981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        fill: true
-                    },
-                    {
-                        label: 'Chi tiêu',
-                        data: data.time.expense,
-                        borderColor: '#EF4444',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        fill: true
-                    }
-                ]
+                datasets: buildSmoothDatasets(data.time)
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'top' }
-                },
-                scales: {
-                    y: { beginAtZero: true }
-                }
-            }
+            options: getSmoothChartOptions()
         });
 
         // Category Chart
@@ -417,6 +414,124 @@ include 'partials/navbar.php';
         document.body.removeChild(link);
 
         setTimeout(() => showToast('success', 'Báo cáo đang được tải xuống'), 600);
+    }
+</script>
+
+<script>
+    function buildSmoothDatasets(series) {
+        return [
+            createSmoothDataset('Thu nhập', series.income, '#10B981'),
+            createSmoothDataset('Chi tiêu', series.expense, '#EF4444')
+        ];
+    }
+
+    function createSmoothDataset(label, data, color) {
+        return {
+            label,
+            data,
+            borderColor: color,
+            pointBackgroundColor: color,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            fill: true,
+            borderWidth: 3,
+            tension: 0.45,
+            cubicInterpolationMode: 'monotone',
+            pointRadius: ctx => getSmoothPointRadius(ctx),
+            pointHoverRadius: 7,
+            backgroundColor: ctx => buildSmoothGradient(ctx, color)
+        };
+    }
+
+    function getSmoothChartOptions() {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 16,
+                        font: { family: 'Inter', size: 13, weight: '600' }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    padding: 12,
+                    cornerRadius: 10,
+                    callbacks: {
+                        label: ctx => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false, drawBorder: false },
+                    ticks: {
+                        color: 'var(--gray-500)',
+                        font: { family: 'Inter', size: 12 }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.2)',
+                        drawBorder: false,
+                        drawTicks: false
+                    },
+                    ticks: {
+                        color: 'var(--gray-500)',
+                        font: { family: 'JetBrains Mono', size: 11 },
+                        callback: value => formatCompactCurrency(value)
+                    }
+                }
+            }
+        };
+    }
+
+    function getSmoothPointRadius(ctx) {
+        const value = ctx.raw || 0;
+        if (value <= 0) return 0;
+        const lastIndex = ctx.dataset.data.length - 1;
+        return ctx.dataIndex === lastIndex ? 6 : 3;
+    }
+
+    function buildSmoothGradient(ctx, color) {
+        const chart = ctx.chart;
+        const { ctx: canvasCtx, chartArea } = chart;
+        if (!chartArea) {
+            return hexToRgba(color, 0.15);
+        }
+        const gradient = canvasCtx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+        gradient.addColorStop(0, hexToRgba(color, 0));
+        gradient.addColorStop(1, hexToRgba(color, 0.35));
+        return gradient;
+    }
+
+    function hexToRgba(hex, alpha) {
+        const sanitized = hex.replace('#', '');
+        const bigint = parseInt(sanitized.length === 3 ? sanitized.repeat(2) : sanitized, 16);
+        const r = (bigint >> 16) & 255;
+        const g = (bigint >> 8) & 255;
+        const b = bigint & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function formatCompactCurrency(value) {
+        const absVal = Math.abs(value);
+        if (absVal >= 1_000_000_000) {
+            return (value / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
+        }
+        if (absVal >= 1_000_000) {
+            return (value / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+        }
+        if (absVal >= 1_000) {
+            return (value / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+        }
+        return value.toString();
     }
 </script>
 
